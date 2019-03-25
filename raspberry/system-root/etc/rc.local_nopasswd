@@ -1,0 +1,40 @@
+#!/bin/sh -e
+#
+# rc.local
+#
+# This script is executed at the end of each multiuser runlevel.
+# Make sure that the script will "exit 0" on success or any other
+# value on error.
+#
+# In order to enable or disable this script just change the execution
+# bits.
+#
+# By default this script does nothing.
+
+# Print the IP address
+_IP=$(hostname -I) || true
+if [ "$_IP" ]; then
+  printf "My IP address is %s\n" "$_IP"
+fi
+
+# lien entre port Serial de pi et le broker MQTT
+cd /home/pi/python ; ./serial2MQTTduplex.py -l "./logSerial2MQTT.log" -r 115200 -d "/dev/ttyAMA0" \
+    -t '{"CM+":"phytotron/arduMain/py/","AT+":"phytotron/admini/py/", "SD+":"phytotron/SDlog/receive/" }' \
+    -u '{"phytotron/arduMain/oh/":"CM+", "phytotron/admini/oh/":"AT+", "phytotron/SDlog/send/":"SD+"}' &
+# lien avec l arduino neopixel
+cd /home/pi/python ; ./MQTT2Neopixel.py -l "./logMQTT2Neopixel.txt" -r 9600 &
+# permet de prendre des photos a la demande
+# ie: lien entre le broker MQTT et divers commandes (python)
+cd /home/pi/python ; ./listenMQTTvarious.py -l "loglistenMQTTvarious.txt" &
+
+# je creuse des tunnels inverse, j aurai acces au phytotron depuis une adresse internet
+su -c "autossh -f -M 25000 -N -R 0.0.0.0:12244:localhost:22 -p 2244 pi@ubiordi.freeboxos.fr" ssh_user 
+su -c "autossh -f -M 25004 -N -R 0.0.0.0:12310:localhost:8080 -p 2244 pi@ubiordi.freeboxos.fr" ssh_user
+# creez vous meme ce tunnel si vous en voulez
+#su -c "autossh -f -M 25002 -N -R 0.0.0.0:12302:localhost:80 -p 2244 pi@ubiordi.freeboxos.fr" ssh_user
+
+# j allume le wlan1 a la main, j ai trop peur que l auto ne fonctionnerait pas
+# notez bien que je laisse 30s au systeme pour que le network soit pret
+sleep 30; sudo wpa_supplicant -B -D wext -i wlan1 -c /etc/wpa_supplicant/wpa_supplicant.conf &
+
+exit 0

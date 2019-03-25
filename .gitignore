@@ -1,0 +1,10 @@
+*.bash*
+*.profile
+*.log
+
+mysql.cfg
+mqtt.cfg
+passwd_mosquitto
+wpa_supplicant.conf
+rc.local
+

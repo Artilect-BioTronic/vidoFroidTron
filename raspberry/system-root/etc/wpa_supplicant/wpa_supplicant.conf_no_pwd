@@ -1,0 +1,11 @@
+country=FR
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+
+# the access to the wifi network is provided by the following command that you paste in the present file:
+#  wpa_passphrase "SSID" "testingPassword"
+network={
+	ssid="domotique"
+	psk=chaine_psk
+}
+

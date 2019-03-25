@@ -1,0 +1,160 @@
+sitemap phytotron label="Menu Principal"
+{
+	Frame label="Vue Générale" {
+		Text item=Inside_Temperature
+		Text item=Inside_Humidity
+		Text item=TempInConsigne
+		Text item=HumidityInConsigne
+		Text item=Outside_Temperature 
+		Text item=Outside_Humidity
+	}
+	
+	Frame label="Vue spécifique" {
+//		Group item=gAtmo  label="Atmosphère"  icon="smoke"
+		Text  label="Atmosphère"  icon="smoke"  {
+			Frame {
+				Text item=TempInConsigneArduino
+				Text item=HumidityInConsigneArduino
+			}
+			Frame {
+				Text item=Inside_Temperature    
+				Text item=Inside_Humidity       
+				Text item=TemperatureDS1        label="TemperatureDS1 ambiant [%.1f °C]"
+				Text item=TemperatureDS2        label="TemperatureDS2 extérieur [%.1f °C]"
+				Text item=TemperatureDS3        label="TemperatureDS3 froid [%.1f °C]"
+			}
+		}
+		
+		Text  label="Lumière"     icon="sun"   {
+			Slider item=Neopixel_Intensity
+			Switch item=Neopixel_num label="Eclairage"         mappings=[0=OFF]
+			Switch item=Neopixel_num label="Eclairage bleu et rouge"   mappings=[1=BR]
+			Switch item=Neopixel_num label="Eclairage bleu"    mappings=[2=Blue]
+			Switch item=Neopixel_num label="Eclairage rouge"   mappings=[3=Red]
+			Switch item=Neopixel_num label="Eclairage vert"    mappings=[4=Green]
+			Switch item=Neopixel_num label="Eclairage blanc"   mappings=[5=White]
+		}
+		
+		Group item=gEnv   label="Environnement extérieur"   icon="garden"
+		
+		Text   label="Phytotron"   icon="greenhouse"   {
+			Frame  {
+				Setpoint item=TempInConsigne	 label="Température consigne (+3.0°) [%.1f °C]"		minValue=0 maxValue=40 step=3
+				Slider item=HumidityInConsigne
+				Setpoint item=TempInConsigne	 label="Température consigne (+1.0°) [%.1f °C]"  	minValue=0 maxValue=40 step=1
+				Setpoint item=HumidityInConsigne 	minValue=0 maxValue=100 step="1."
+				Text item=TempInConsigneArduino
+				Text item=HumidityInConsigneArduino
+				Text item=Heater
+				Text item=Climate
+				Text item=Frontdoor
+			}
+			Frame 	label="consigne journaliere"   {
+				Image   item=urlImageCamera url="http://192.168.2.1/pub/photos/lastPi.jpg" label="Webcam du phytotron" refresh=90000
+				Image   item=urlImageCamera url="http://localhost/pub/images/VueBalconSalon4.jpg" label="Webcam du phytotron" refresh=90000
+			}
+		}
+		
+//		Group item=gSoil  label="Sol/Substrat" icon="bath"
+//		Group item=gWater label="Eau"         icon="water"
+//		Group item=gDev   label="Phytotron"   icon="greenhouse"
+	}
+	
+	Frame label="Courbes de mesures" {
+		Text label="Mesures"  icon="chart" {
+			Frame label="Temperatures" {
+				Text item=Outside_Temperature
+				Text item=Inside_Temperature
+			}
+			Frame  {
+				Switch item=Mesures_Chart_Period label="Chart Period" mappings=[0="Hour", 1="Day", 2="Week"]
+				
+				Chart item=gTempExtChart period=h refresh=60 visibility=[Mesures_Chart_Period==0, Mesures_Chart_Period=="NULL"]
+				Chart item=gTempExtChart period=D refresh=3600 visibility=[Mesures_Chart_Period==1]
+				Chart item=gTempExtChart period=W refresh=3600 visibility=[Mesures_Chart_Period==2]
+
+				Chart item=gTempChart period=h refresh=60 visibility=[Mesures_Chart_Period==0, Mesures_Chart_Period=="NULL"]
+				Chart item=gTempChart period=D refresh=3600 visibility=[Mesures_Chart_Period==1]
+				Chart item=gTempChart period=W refresh=3600 visibility=[Mesures_Chart_Period==2]
+			}
+			Frame  {
+				Chart item=gHumChart period=h refresh=60 visibility=[Mesures_Chart_Period==0, Mesures_Chart_Period=="NULL"]
+				Chart item=gHumChart period=D refresh=3600 visibility=[Mesures_Chart_Period==1]
+				Chart item=gHumChart period=W refresh=3600 visibility=[Mesures_Chart_Period==2]
+			}
+		}
+	}
+	
+	Frame label="Photo" {
+		Text  label="Webcam du phytotron"  icon="camera"  {
+			Frame label="Photo" {
+				Switch  item=TakePicture  label="Prends une photo dans 5s" icon="camera" mappings=[1=cheeese]
+				// With my firefox linux, the update with urlImageCamera does not work
+				Image   item=urlImageCamera url="http://192.168.2.1/pub/photos/lastPi.jpg" label="Webcam du phytotron" refresh=90000
+				// the file VueBalconSalon4.jog is in ../conf/html/, we can not use link
+				Image   item=urlImageCamera url="http://localhost:8080/static/VueBalconSalon4.jpg" label="Webcam du phytotron" refresh=90000
+//				 Webview  item=urlImageCamera url="http://192.168.2.1/pub/photos/lastPi.jpg" label="Webcam du phytotron 3" refresh=90000 height=10 
+			}
+		}
+	}
+	
+	Text item=PbAvantFinFichierPhytotronItem
+	
+	Frame label="Admin Matériel" {
+
+		Text label="Admin"  icon="shield" {
+			Switch item=DateTimeAsk        mappings=[1=Ask]
+			Frame   {
+				Text item=DateTimePi
+				Text item=DateTimeArduino
+			}
+			Switch item=wifiAsk             mappings=[1=Ask]
+			Frame   {
+				Text item=wifiName
+				Text item=wifiIP
+			}
+			Setpoint item=SelectWhatAdmin	 label="Special"  	minValue=0 maxValue=20 step=1
+			Switch item=WhatAdmin        
+		}
+	}
+	Frame label="Groupes" {
+		Switch item=Lumieres mappings=[OFF="All Off"]
+		Group item=Lumieres
+		Switch item=Radiateurs mappings=[OFF="All Off"]
+		Group item=Radiateurs
+		Text item=Temperature
+	}
+	
+	Frame label="Tests" {
+		Group item=gTest label="Tests"
+	}
+    Frame label="Demo" {
+		Text item=CurrentDate
+		Text label="Group Demo" icon="firstfloor" {
+			Switch item=Lumieres mappings=[OFF="All Off"]
+			Group item=Heating
+			Group item=Windows
+			Text item=Temperature
+		}
+		Text label="Widget Overview" icon="chart" {
+			Frame label="Binary Widgets" {
+				Switch item=DemoSwitch label="Toggle Switch"
+				Switch item=DemoSwitch label="Button Switch" mappings=[ON="On"]
+			}
+			Frame label="Discrete Widgets" {
+				Selection item=Scene_General label="Scene Selection" mappings=[0=off, 1=TV, 2=Dinner, 3=Reading]
+				Switch item=Scene_General label="Scene" mappings=[1=TV, 2=Dinner, 3=Reading]
+				Setpoint item=Temperature_Setpoint minValue=16 maxValue=28 step=0.5
+			}
+			Frame label="Percent-based Widgets" {
+				Slider item=DimmedLight switchSupport
+				Colorpicker item=RGBLight icon="slider"
+				Switch item=DemoShutter
+				Slider item=DemoBlinds
+			}
+			Frame label="Map/Location" {
+				Mapview item=DemoLocation height=10
+			}
+		}
+	}
+}
