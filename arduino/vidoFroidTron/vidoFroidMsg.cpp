@@ -14,21 +14,22 @@ SerialListener serListenerTH(SERIAL_MSG);
 // example:  int sendSketchId(const String& dumb);
 
 // list of available commands (user) that the arduino will accept
-Command cmdUserPhy[] = {
+Command cmdUser[] = {
     Command("SV",                   &sendFakeVal),
     Command("csgn/humidity/cmd",    &updateHumCsgn,     "i",    "1-90"),
     Command("csgn/temp/cmd",        &updateTempCsgn,    "i",    "-5-50"),
     Command("setDate",              &setDate,   "i,i,i,i,i,i",  "1900-2100,1-12,,0-23,,"),
     Command("sendDate",             &getDate)
 };
-CommandList cmdLUserPhy("cmdUser", "CM+", SIZE_OF_TAB(cmdUserPhy), cmdUserPhy );
+CommandList cmdLUserPhy("cmdUser", "CM+", SIZE_OF_TAB(cmdUser), cmdUser );
 
 // list of available commands (system ctrl) that the arduino will accept
-Command cmdSysPhy[] = {
+Command cmdSys[] = {
     Command("idSketch",     &sendSketchId),
-    Command("idBuild",      &sendSketchBuild)
+    Command("idBuild",      &sendSketchBuild),
+    Command("listCmd",      &sendListCmd,      "s,s",      "*,short|full")  // eg: :cmdSys,short  or  :,full
 };
-CommandList cmdLSysPhy("cmdSys", "AT+", SIZE_OF_TAB(cmdSysPhy), cmdSysPhy );
+CommandList cmdLSysPhy("cmdSys", "AT+", SIZE_OF_TAB(cmdSys), cmdSys );
 
 Command cmdSD[] = {
     Command("openStay",     &srStayOpen,    "s,cc", "*,rwascet"),   // :bob.txt,r  filenameDOS8.3 (short names), openMode (read write... )
@@ -80,6 +81,10 @@ int getDate(const CommandList& aCL, Command &aCmd, const String& aInput)
 
       aCL.msgPrint(aCL.getCommand(aInput) + "/state:"+ buffer);
       aCL.msgOK(aInput, buffer);
+    }
+    else   {
+        aCL.msgKO(aInput, F("I could not read back time !"));
+        return 1;
     }
     return 0;
 }

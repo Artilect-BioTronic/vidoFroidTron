@@ -31,7 +31,7 @@ extern SdFat SD;
 #define CFG_SD_RTC      2
 
 
-#define CFG_MAT  CFG_CPLT
+#define CFG_MAT  CFG_SD_RTC
 
 #if (CFG_MAT == CFG_CPLT)
 #define SERIAL_MSG Serial1
@@ -40,7 +40,7 @@ extern SdFat SD;
 #endif
 
 #include "msgSerial.h"
-#include "TempHumMsg.h"
+#include "vidoFroidMsg.h"
 
 
 const uint8_t pinRad1 = 30;
@@ -54,9 +54,7 @@ const uint8_t CapteurHumiditeTemperatureInterieurPIN = 40; // pin capteur humidi
 const uint8_t PinOneWire = 69 ; // pin capteur temperature Dallas
 const uint8_t pinTelecommande = 7 ;
 
-// Si vous n avez pas de shield deuligne, il faut connecter pinStick a 5V,
-//   sinon le sketch voit des actions permanentes pour naviguer dans le menu
-// Si vous n utilisez pas le serial1, il faut bouchonner rx
+// Si vous n utilisez pas le serial1, vous pouvez bouchonner rx (le mettre a 5V)
 
 // example of frame:
 // -t "/phytotron/cli/mesure/D;H;ti;hi;te;he;t3;t2;t1"
@@ -106,8 +104,6 @@ byte degres[8] =
 Deuligne lcd ;
 const String effacement = "                " ;
 // variables et constantes pour menu
-const unsigned long delaisMenu = 5000 ;
-unsigned int valeurStick = 0 ;
 boolean menu = false ;
 boolean selection = false ;
 boolean validation = false ;
@@ -117,13 +113,12 @@ boolean reglageHum = false ;
 int consigneTemp = 20 ;
 int consigneTempProvisoire = 20 ;
 byte plageTemp = 1 ;
-byte consigneHum = 50 ;
-byte consigneHumProvisoire = 50 ;
+int consigneHum = 50 ;
+int consigneHumProvisoire = 50 ;
 byte plageHum = 5 ;
 //bool commandeChauffage = false ;  // use chauffage.isOn()
 bool commandeRefroidissement = false ;
 bool commandeHum = false ;
-unsigned long positionFichierConsignes ;
 Chauffage chauffage(pinRad1, pinRad2, pinFan, 50);
 
 
@@ -136,7 +131,6 @@ const String separateurFichier = ";" ;
 const String  NomFichierConsignes  = "cons.csv" ;
 const String  NomFichierMesure  = "mes.csv" ;
 const String  NomFichierCommandes  = "com.csv" ;
-const unsigned long  positionEnregistrementFichierConsignes  = 7 ; // position avant derniere consigne temperature
 
 //Echanges de fichiers
 const String debutFichier = "Debut du fichier" ;
@@ -218,8 +212,10 @@ void setup(void)
   commandeSwitch ( humidificateurArret ) ;
   commandeSwitch ( refroidissementArret ) ;
   chauffage.switchOff();
+
   Serial1.begin ( serial1Rate ) ;
   Serial.begin ( serialRate ) ;
+
   while ( !Serial )
   {
     ; // wait for serial port to connect. Needed for Leonardo only
@@ -231,31 +227,19 @@ void setup(void)
   // on  setup  la librairie de communication
   setupTempHumMsg();
 
-  lcd.init ( ) ;
-  lcd.createChar ( 0 , degres ) ;
+  //Initialise the sensor
   CapteurHumiditeTemperatureInterieur.begin ( ) ;
   CapteurHumiditeTemperatureExterieur.begin ( ) ;
 
-  releveRTC ( ) ; //on releve date et heure sur l'horloge RTC
-  sensor_t sensor; //Initialise the sensor
+  // recupere les characteristiques du senseur (si on voulait les afficher)
+  sensor_t sensor;
   CapteurHumiditeTemperatureInterieur.temperature().getSensor(&sensor);
   CapteurHumiditeTemperatureInterieur.humidity().getSensor(&sensor);
   CapteurHumiditeTemperatureExterieur.temperature().getSensor(&sensor);
   CapteurHumiditeTemperatureExterieur.humidity().getSensor(&sensor);
 
-  /*  if (!htu.begin())
-    {
-      Serial.println("Capteur HTU21 absent");
-      HTU21 = false ;
-      //while (1);
-    }
-    else
-    {
-      HTU21 = true ;
-    }
-
-  */
-
+  //on releve date et heure sur l'horloge RTC
+  releveRTC ( ) ;
 
 
   //initialisation carte SD
@@ -276,22 +260,10 @@ void setup(void)
       erreur ( 4 ) ; //non ecriture fichier mesure sur carte SD
     }
 
-    File regFile = SD.open ( NomFichierConsignes , FILE_READ ) ;
-    if (regFile)
-    {
-      positionFichierConsignes = regFile.size ( ) ;
-      positionFichierConsignes = positionFichierConsignes - positionEnregistrementFichierConsignes ;
-      regFile.seek ( positionFichierConsignes ) ;
-      consigneTemp = ( ( regFile.read ( ) - 48 ) * 10 ) + ( regFile.read ( ) - 48 ) ;
-      regFile.read ( ) ;
-      consigneHum = ( ( regFile.read ( ) - 48 ) * 10 ) + ( regFile.read ( ) - 48 ) ;
-      regFile.close ( ) ;
-    }
-    else
-    {
-      erreur ( 5 ) ;  //non lecture fichier consigne sur carte SD
-    }
+    // je recupere la consigne en lisant la derniere ligne du fichier de csgn
+    litConsigneFichier(consigneTemp, consigneHum);
 
+    // je recopie la consigne actuelle dans le fichier (que je viens de lire)
     File regFileEcriture = SD.open ( NomFichierConsignes , FILE_WRITE ) ;
     if (regFileEcriture)
     {
@@ -310,50 +282,35 @@ void setup(void)
       //non ecriture fichier consigne sur carte SD
       erreur ( 6 ) ;
     }
+
+    // ecriture entete fichier de cmd
+    dataFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
+    if (dataFile)
+    {
+      dataFile.print ( "Date" ) ;
+      dataFile.print ( separateurFichier ) ;
+      dataFile.print ( "Heure" ) ;
+      dataFile.print ( separateurFichier ) ;
+      dataFile.print ( "Chauffage" ) ;
+      dataFile.print ( separateurFichier ) ;
+      dataFile.print ( "Refroidissement" ) ;
+      dataFile.print ( separateurFichier ) ;
+      dataFile.print ( "Humidification" ) ;
+      dataFile.println ( "" ) ;
+      dataFile.close();
+    }
+    else
+    {
+      erreur ( 8 ) ; //non ecriture fichier de cmd sur carte SD
+    }
   }
 
-  File regFileEcriture = SD.open ( NomFichierConsignes , FILE_WRITE ) ;
-  if ( regFileEcriture )
-  {
-    regFileEcriture.print ( dateString ) ;
-    regFileEcriture.print ( separateurFichier ) ;
-    regFileEcriture.print ( heureString ) ;
-    regFileEcriture.print ( separateurFichier ) ;
-    regFileEcriture.print ( numeroDix ( consigneTemp ) ) ;
-    regFileEcriture.print ( separateurFichier ) ;
-    regFileEcriture.print ( numeroDix ( consigneHum ) ) ;
-    regFileEcriture.println ( "" ) ;
-    regFileEcriture.close ( ) ;
-  }
-  else
-  {
-    //non ecriture fichier consigne sur carte SD
-    erreur ( 7 ) ;
-  }
+  ecritConsigneDansFichier();
 
-  File dataFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
-  if (dataFile)
-  {
-    dataFile.print ( "Date" ) ;
-    dataFile.print ( separateurFichier ) ;
-    dataFile.print ( "Heure" ) ;
-    dataFile.print ( separateurFichier ) ;
-    dataFile.print ( "Chauffage" ) ;
-    dataFile.print ( separateurFichier ) ;
-    dataFile.print ( "Refroidissement" ) ;
-    dataFile.print ( separateurFichier ) ;
-    dataFile.print ( "Humidification" ) ;
-    dataFile.println ( "" ) ;
-    dataFile.close();
-  }
-  else
-  {
-    erreur ( 8 ) ; //non ecriture fichier mesure sur carte SD
-  }
 
   releveRTC ( ) ; //on releve date et heure sur l'horloge RTC
   releveValeurs ( ) ;
-  afficheLCDregulier ( ) ;
+//  afficheLCDregulier ( ) ;
   secondesAffichagePrecedent = secondes ;
   // tempsEnregistrement correspondra au moment du dernier enregistrement, 1 par mn
   // je prefere arrondir tempsEnregistrement a une mn entiere
@@ -398,327 +355,35 @@ void loop ( )
           commandeSwitch ( humidificateurArret) ;
   }
 
-  // affichage regulier
-  if ( ( secondes !=  secondesAffichagePrecedent ) && ! menu )
+  // affichage regulier  (chaque 1s)
+  if ( secondes !=  secondesAffichagePrecedent )
   {
     secondesAffichagePrecedent = secondes ;
     releveValeurs ( ) ;
-//    EnregistrementFichierMesure ( ) ;
+//    EnregistrementFichierMesure ( ) ; // on enregistre dans le fichier que 1/mn
     FonctionTexteTrameMesures ( ) ;
-    afficheLCDregulier ( ) ;
+//    afficheLCDregulier ( ) ;
     affichageUsbSecondes ( ) ;
     affichageSerieRaspSecondes ( ) ;
   }
 
 
-  //delais menu
-  if ( ( millis ( ) - debutMenu > delaisMenu ) && menu )
-  {
-    menu = false ;
-    selection = false ;
-    //Serial.println ( "fin menu" ) ;
-    lcd.noBlink ( ) ;
-    afficheLCD ( effacement , 0, 0 ) ;
-    afficheLCD ( effacement , 0, 1 ) ;
-  }
-
-  // lecture commande stick
-  valeurStick = analogRead ( pinStick ) ;
-  if ( valeurStick < 1013 )
-  {
-    debutMenu = millis ( ) ;
-    if ( ! menu )
-    {
-      //Serial.println ( "entree menu" ) ;
-      afficheLCD ( effacement , 0 , 0 ) ;
-      afficheLCD ( "Reglages" , 4 , 0 ) ;
-      afficheLCD ( effacement , 0 , 1 ) ;
-      afficheLCD ( String ( consigneTemp ) , 0 , 1 ) ;
-      lcd.write ( 0 ) ;
-      lcd.print ( "C" ) ;
-      afficheLCD ( "C" , 3 , 1 ) ;
-      afficheLCD ( String ( consigneHum ) , 13 , 1 ) ;
-      afficheLCD ( "%" , 15, 1 ) ;
-      afficheLCD ( "" , 7, 1 ) ;
-      lcd.blink ( ) ;
-      menu = true ;
-      consigneTempProvisoire = consigneTemp ;
-      consigneHumProvisoire = consigneHum ;
-    }
-
-    if ( valeurStick < 10 && selection ) // droite
-    {
-      lcd.setCursor ( 15 , 1 ) ;
-      reglageHum = true ;
-      reglageTemp = false ;
-    }
-
-    if ( 665 < valeurStick && valeurStick < 685 && selection  ) // gauche
-    {
-      lcd.setCursor ( 2 , 1 ) ;
-      reglageHum = false ;
-      reglageTemp = true ;
-    }
-
-    if ( 241 < valeurStick && valeurStick < 261 && selection  ) // haut
-    {
-      if ( reglageTemp )
-      {
-        consigneTempProvisoire ++ ;
-        lcd.setCursor ( 0 , 1 ) ;
-        lcd.print ( numeroDix ( consigneTempProvisoire ) ) ;
-      }
-      if ( reglageHum )
-      {
-        consigneHumProvisoire ++ ;
-        lcd.setCursor ( 13 , 1 ) ;
-        lcd.print ( numeroDix ( consigneHumProvisoire ) ) ;
-      }
-      selection = false ;
-    }
-
-    if ( 487 < valeurStick && valeurStick < 504 && selection  ) // bas
-    {
-      if ( reglageTemp )
-      {
-        consigneTempProvisoire -- ;
-        lcd.setCursor ( 0 , 1 ) ;
-        lcd.print ( numeroDix ( consigneTempProvisoire ) ) ;
-      }
-
-      if ( reglageHum )
-      {
-        consigneHumProvisoire -- ;
-        lcd.setCursor ( 13 , 1 ) ;
-        lcd.print ( numeroDix ( consigneHumProvisoire ) ) ;
-      }
-      selection = false ;
-    }
-
-    if ( 850 < valeurStick && valeurStick < 870 && selection && ! validation ) // appuye
-    {
-      //enregistre les consignes
-      consigneHum = consigneHumProvisoire ;
-      consigneTemp = consigneTempProvisoire ;
-      validation = true ;
-      //Serial.println ( "appuye" ) ;
-    }
-  }
-
-  if ( menu && ! selection && (valeurStick > 1013) )
-  {
-    selection = true ;
-    //Serial.println ( "selection" ) ;
-  }
-
-  if ( menu && selection && validation && (valeurStick > 1013) )
-  {
-    menu = false ;
-    selection = false ;
-    validation = false ;
-    //Serial.println ( "enregistre" ) ;
-    lcd.noBlink ( ) ;
-    lcd.setCursor ( 0 , 0 ) ;
-    lcd.print ( effacement ) ;
-    lcd.setCursor ( 0 , 1 ) ;
-    lcd.print ( effacement ) ;
-    lcd.setCursor ( 1 , 0 ) ;
-    lcd.print ( "Enregistrement" ) ;
-    delay ( 2000 ) ;
-
-    ecritConsigneDansFichier();
-    sendConsigne();
-
-    lcd.setCursor ( 0 , 0 ) ;
-    lcd.print ( effacement ) ;
-    lcd.setCursor ( 3 , 0 ) ;
-    lcd.print ( "Enreg. OK" ) ;
-    delay ( 2000 ) ;
-    lcd.setCursor ( 0 , 0 ) ;
-    lcd.print ( effacement ) ;
-  }
+  //*********************************
+  // gestion du menu  deuligne
+  //*********************************
+//  gestionMenuDeuligne();
 
 
   //*********************************
   //       Asservissements
   //*********************************
 
-  // Humidite prise " D"
-  if ( (humiditeInterieureEntiere < ( consigneHum - plageHum )) & ! commandeHum )
-  {
-    //telecommande.send ( 5393 , 24 ) ; // marche
-    commandeSwitch ( humidificateurMarche ) ;
-    commandeHum = true ;
+  // asservissement humidite
+  asserveHumidite();
 
-    // previent du changement de commande
-    sendCmdState("","", "Marche_Humidification");
-    File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
-    if ( comFile )
-    {
-      comFile.print ( dateString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( heureString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "Marche_Humidification" ) ;
-      comFile.println ( "" ) ;
-      comFile.close();
-    }
-    else
-    {
-      //erreur sur ecriture recurente carte SD
-      erreur ( 12 ) ;
-    }
-  }
-  if ( (humiditeInterieureEntiere > consigneHum) & commandeHum )
-  {
-    //telecommande.send ( 5396 , 24 ) ; // arret
-    commandeSwitch ( humidificateurArret ) ;
-    commandeHum = false ;
+  // asservissement temperature
+  asserveTemperature();
 
-    // previent du changement de commande
-    sendCmdState("","", "Arret_Humidification");
-    File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
-    if ( comFile )
-    {
-      comFile.print ( dateString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( heureString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "Arret_Humidification" ) ;
-      comFile.println ( "" ) ;
-      comFile.close();
-    }
-    else
-    {
-      //erreur sur ecriture recurente carte SD
-      erreur ( 13 ) ;
-    }
-  }
-
-  // Attention, On ne veut pas que le refroidissement du frigo ne declenche le chauffage
-  //   ici on penalise le chauffage car on est en ete
-  // Chauffage prise " A "
-  if ( temperatureInterieureEntiere < ( consigneTemp - plageTemp*3 ) && chauffage.isOff() )
-  {
-    chauffage.switchOn();
-
-    // previent du changement de commande
-    sendCmdState("Marche_Chauffage","", "");
-    File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
-    if ( comFile )
-    {
-      comFile.print ( dateString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( heureString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "Marche_Chauffage" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.println ( "" ) ;
-      comFile.close();
-    }
-    else
-    {
-      //erreur sur ecriture recurente carte SD
-      erreur ( 14 ) ;
-    }
-  }
-
-  if ( temperatureInterieureEntiere > ( consigneTemp + plageTemp ) && chauffage.isOn() )
-  {
-    chauffage.switchOff();
-
-    // previent du changement de commande
-    sendCmdState("Arret_Chauffage","", "");
-    File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
-    if ( comFile )
-    {
-      comFile.print ( dateString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( heureString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "Arret_Chauffage" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.println ( "" ) ;
-      comFile.close();
-    }
-    else
-    {
-      //erreur sur ecriture recurente carte SD
-      erreur ( 15 ) ;
-    }
-  }
-
-  // Refroidissement prise " B "
-  if ( temperatureInterieureEntiere > ( consigneTemp + plageTemp*2 ) && ! commandeRefroidissement )
-  {
-    commandeSwitch ( refroidissementMarche ) ;
-    commandeRefroidissement = true ;
-
-    // previent du changement de commande
-    sendCmdState("","Marche_Refroidissement", "");
-    File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
-    if ( comFile )
-    {
-      comFile.print ( dateString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( heureString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "Marche_Refroidissement" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.println ( "" ) ;
-      comFile.close();
-    }
-    else
-    {
-      //erreur sur ecriture recurente carte SD
-      erreur ( 16 ) ;
-    }
-  }
-  if ( temperatureInterieureEntiere < ( consigneTemp - plageTemp*2. ) && commandeRefroidissement )
-  {
-    commandeSwitch ( refroidissementArret ) ;
-    commandeRefroidissement = false ;
-
-    // previent du changement de commande
-    sendCmdState("","Arret_Refroidissement", "");
-    File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
-    if ( comFile )
-    {
-      comFile.print ( dateString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( heureString ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "Arret_Refroidissement" ) ;
-      comFile.print ( separateurFichier ) ;
-      comFile.print ( "" ) ;
-      comFile.println ( "" ) ;
-      comFile.close();
-    }
-    else
-    {
-      //erreur sur ecriture recurente carte SD
-      erreur ( 17 ) ;
-    }
-  }
 
   serListenerTH.checkMessageReceived();
 
@@ -729,7 +394,9 @@ void loop ( )
   // Lecture port serie RasbPi  -->  remplace par serListenerTH
 //  lectureSerialRaspi_PM() ;
 
-}
+}   // loop
+
+
 
 /*=====================================*/
 /*           liste de fonctions        */
@@ -906,6 +573,28 @@ int ecritConsigneDansFichier()   {
     }
 }
 
+int litConsigneFichier(int &consigneTemp, int &consigneHum)
+{
+    // position avant derniere consigne temperature
+    const unsigned long  positionEnregistrementFichierConsignes  = 7 ;
+    unsigned long positionFichierConsignes ;
+    File regFile = SD.open ( NomFichierConsignes , FILE_READ ) ;
+    if (regFile)
+    {
+        positionFichierConsignes = regFile.size ( ) ;
+        positionFichierConsignes = positionFichierConsignes - positionEnregistrementFichierConsignes ;
+        regFile.seek ( positionFichierConsignes ) ;
+        consigneTemp = ( ( regFile.read ( ) - 48 ) * 10 ) + ( regFile.read ( ) - 48 ) ;
+        regFile.read ( ) ;
+        consigneHum = ( ( regFile.read ( ) - 48 ) * 10 ) + ( regFile.read ( ) - 48 ) ;
+        regFile.close ( ) ;
+    }
+    else
+    {
+        erreur ( 5 ) ;  //non lecture fichier consigne sur carte SD
+    }
+}
+
 void releveValeurs ( void )
 {
 #if (CFG_MAT != CFG_CPLT)
@@ -1077,7 +766,7 @@ void mesureTemperature18B20 (void) //Dallas
 //    Dallas [ noCapteur - 1 ] = MesureDallas ;
 //    Serial.println(String("DS n°")+noCapteur +":"+MesureDallas);
   }
-}
+}   // mesureTemperature18B20
 
 
 
@@ -1247,3 +936,311 @@ void EnregistrementFichierMesure ( void )
     erreur ( 9 ) ;
   }
 }
+
+
+
+void asserveHumidite()
+{
+    // Humidite prise " D"
+    if ( (humiditeInterieureEntiere < ( consigneHum - plageHum )) & ! commandeHum )
+    {
+      //telecommande.send ( 5393 , 24 ) ; // marche
+      commandeSwitch ( humidificateurMarche ) ;
+      commandeHum = true ;
+
+      // previent du changement de commande
+      sendCmdState("","", "Marche_Humidification");
+      File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
+      if ( comFile )
+      {
+        comFile.print ( dateString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( heureString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "Marche_Humidification" ) ;
+        comFile.println ( "" ) ;
+        comFile.close();
+      }
+      else
+      {
+        //erreur sur ecriture recurente carte SD
+        erreur ( 12 ) ;
+      }
+    }
+    if ( (humiditeInterieureEntiere > consigneHum) & commandeHum )
+    {
+      //telecommande.send ( 5396 , 24 ) ; // arret
+      commandeSwitch ( humidificateurArret ) ;
+      commandeHum = false ;
+
+      // previent du changement de commande
+      sendCmdState("","", "Arret_Humidification");
+      File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
+      if ( comFile )
+      {
+        comFile.print ( dateString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( heureString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "Arret_Humidification" ) ;
+        comFile.println ( "" ) ;
+        comFile.close();
+      }
+      else
+      {
+        //erreur sur ecriture recurente carte SD
+        erreur ( 13 ) ;
+      }
+    }
+}   // asserveHumidite
+
+
+void asserveTemperature()
+{
+    // Attention, On ne veut pas que le refroidissement du frigo ne declenche le chauffage
+    //   ici on penalise le chauffage car on est en ete
+    // Chauffage prise " A "
+    if ( temperatureInterieureEntiere < ( consigneTemp - plageTemp*3 ) && chauffage.isOff() )
+    {
+      chauffage.switchOn();
+
+      // previent du changement de commande
+      sendCmdState("Marche_Chauffage","", "");
+      File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
+      if ( comFile )
+      {
+        comFile.print ( dateString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( heureString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "Marche_Chauffage" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.println ( "" ) ;
+        comFile.close();
+      }
+      else
+      {
+        //erreur sur ecriture recurente carte SD
+        erreur ( 14 ) ;
+      }
+    }
+
+    if ( temperatureInterieureEntiere > ( consigneTemp + plageTemp ) && chauffage.isOn() )
+    {
+      chauffage.switchOff();
+
+      // previent du changement de commande
+      sendCmdState("Arret_Chauffage","", "");
+      File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
+      if ( comFile )
+      {
+        comFile.print ( dateString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( heureString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "Arret_Chauffage" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.println ( "" ) ;
+        comFile.close();
+      }
+      else
+      {
+        //erreur sur ecriture recurente carte SD
+        erreur ( 15 ) ;
+      }
+    }
+
+    // Refroidissement prise " B "
+    if ( temperatureInterieureEntiere > ( consigneTemp + plageTemp*2 ) && ! commandeRefroidissement )
+    {
+      commandeSwitch ( refroidissementMarche ) ;
+      commandeRefroidissement = true ;
+
+      // previent du changement de commande
+      sendCmdState("","Marche_Refroidissement", "");
+      File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
+      if ( comFile )
+      {
+        comFile.print ( dateString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( heureString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "Marche_Refroidissement" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.println ( "" ) ;
+        comFile.close();
+      }
+      else
+      {
+        //erreur sur ecriture recurente carte SD
+        erreur ( 16 ) ;
+      }
+    }
+    if ( temperatureInterieureEntiere < ( consigneTemp - plageTemp*2. ) && commandeRefroidissement )
+    {
+      commandeSwitch ( refroidissementArret ) ;
+      commandeRefroidissement = false ;
+
+      // previent du changement de commande
+      sendCmdState("","Arret_Refroidissement", "");
+      File comFile = SD.open ( NomFichierCommandes , FILE_WRITE ) ;
+      if ( comFile )
+      {
+        comFile.print ( dateString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( heureString ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "Arret_Refroidissement" ) ;
+        comFile.print ( separateurFichier ) ;
+        comFile.print ( "" ) ;
+        comFile.println ( "" ) ;
+        comFile.close();
+      }
+      else
+      {
+        //erreur sur ecriture recurente carte SD
+        erreur ( 17 ) ;
+      }
+    }
+}   // asserveTemperature
+
+
+
+void gestionMenuDeuligne()
+{
+    // lecture commande stick
+//    unsigned int valeurStick = analogRead ( pinStick ) ;
+    unsigned int valeurStick = 350 ;   // valeur inactive
+    if ( valeurStick < 1013 )
+    {
+      debutMenu = millis ( ) ;
+      if ( ! menu )
+      {
+        //Serial.println ( "entree menu" ) ;
+        afficheLCD ( effacement , 0 , 0 ) ;
+        afficheLCD ( "Reglages" , 4 , 0 ) ;
+        afficheLCD ( effacement , 0 , 1 ) ;
+        afficheLCD ( String ( consigneTemp ) , 0 , 1 ) ;
+        lcd.write ( 0 ) ;
+        lcd.print ( "C" ) ;
+        afficheLCD ( "C" , 3 , 1 ) ;
+        afficheLCD ( String ( consigneHum ) , 13 , 1 ) ;
+        afficheLCD ( "%" , 15, 1 ) ;
+        afficheLCD ( "" , 7, 1 ) ;
+        lcd.blink ( ) ;
+        menu = true ;
+        consigneTempProvisoire = consigneTemp ;
+        consigneHumProvisoire = consigneHum ;
+      }
+
+      if ( valeurStick < 10 && selection ) // droite
+      {
+        lcd.setCursor ( 15 , 1 ) ;
+        reglageHum = true ;
+        reglageTemp = false ;
+      }
+
+      if ( 665 < valeurStick && valeurStick < 685 && selection  ) // gauche
+      {
+        lcd.setCursor ( 2 , 1 ) ;
+        reglageHum = false ;
+        reglageTemp = true ;
+      }
+
+      if ( 241 < valeurStick && valeurStick < 261 && selection  ) // haut
+      {
+        if ( reglageTemp )
+        {
+          consigneTempProvisoire ++ ;
+          lcd.setCursor ( 0 , 1 ) ;
+          lcd.print ( numeroDix ( consigneTempProvisoire ) ) ;
+        }
+        if ( reglageHum )
+        {
+          consigneHumProvisoire ++ ;
+          lcd.setCursor ( 13 , 1 ) ;
+          lcd.print ( numeroDix ( consigneHumProvisoire ) ) ;
+        }
+        selection = false ;
+      }
+
+      if ( 487 < valeurStick && valeurStick < 504 && selection  ) // bas
+      {
+        if ( reglageTemp )
+        {
+          consigneTempProvisoire -- ;
+          lcd.setCursor ( 0 , 1 ) ;
+          lcd.print ( numeroDix ( consigneTempProvisoire ) ) ;
+        }
+
+        if ( reglageHum )
+        {
+          consigneHumProvisoire -- ;
+          lcd.setCursor ( 13 , 1 ) ;
+          lcd.print ( numeroDix ( consigneHumProvisoire ) ) ;
+        }
+        selection = false ;
+      }
+
+      if ( 850 < valeurStick && valeurStick < 870 && selection && ! validation ) // appuye
+      {
+        //enregistre les consignes
+        consigneHum = consigneHumProvisoire ;
+        consigneTemp = consigneTempProvisoire ;
+        validation = true ;
+        //Serial.println ( "appuye" ) ;
+      }
+    }
+
+    if ( menu && ! selection && (valeurStick > 1013) )
+    {
+      selection = true ;
+      //Serial.println ( "selection" ) ;
+    }
+
+    if ( menu && selection && validation && (valeurStick > 1013) )
+    {
+      menu = false ;
+      selection = false ;
+      validation = false ;
+      //Serial.println ( "enregistre" ) ;
+      lcd.noBlink ( ) ;
+      lcd.setCursor ( 0 , 0 ) ;
+      lcd.print ( effacement ) ;
+      lcd.setCursor ( 0 , 1 ) ;
+      lcd.print ( effacement ) ;
+      lcd.setCursor ( 1 , 0 ) ;
+      lcd.print ( "Enregistrement" ) ;
+      delay ( 2000 ) ;
+
+      ecritConsigneDansFichier();
+      sendConsigne();
+
+      lcd.setCursor ( 0 , 0 ) ;
+      lcd.print ( effacement ) ;
+      lcd.setCursor ( 3 , 0 ) ;
+      lcd.print ( "Enreg. OK" ) ;
+      delay ( 2000 ) ;
+      lcd.setCursor ( 0 , 0 ) ;
+      lcd.print ( effacement ) ;
+    }
+}   // gestionMenuDeuligne

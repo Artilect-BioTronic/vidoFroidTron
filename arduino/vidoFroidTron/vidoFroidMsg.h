@@ -8,7 +8,7 @@
 #define CFG_CPLT        1
 #define CFG_SD_RTC      2
 
-#define CFG_MAT_CHECK   CFG_CPLT
+#define CFG_MAT_CHECK   CFG_SD_RTC
 
 #ifdef CFG_MAT
     #if (CFG_MAT != CFG_MAT_CHECK)
@@ -49,8 +49,11 @@ void EnregistrementFichierMesure ( void );
 int lectureSerialUSB_PM();
 int lectureSerialRaspi_PM();
 int ecritConsigneDansFichier();
+int litConsigneFichier(int &consigneTemp, int &consigneHum);
 int sendConsigne();
 String getTrameConsigne();
+void asserveHumidite();
+void asserveTemperature();
 int sendCmdState(String warm, String cold, String humidity);
 
 // liste des fonctions definies dans le fichier TempHumMsg.cpp
@@ -64,7 +67,7 @@ void     fakeReleveValeurs();
 
 // liste des variables globales definies dans le fichier TempHumDeligne.ino
 extern int consigneTemp;
-extern byte consigneHum ;
+extern int consigneHum ;
 
 extern byte temperatureInterieureEntiere ;
 extern byte humiditeInterieureEntiere ;
