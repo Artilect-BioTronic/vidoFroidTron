@@ -46,7 +46,6 @@ extern SdFat SD;
 const uint8_t pinRad1 = 30;
 const uint8_t pinRad2 = 31;
 const uint8_t pinFan = 32;
-const uint8_t pinStick = A0 ; // stick du deuligne pour menu
 //const int chipSelect = 10 ; // uno
 const uint8_t chipSelect = 53 ; // mega   (SPI pour SDCard)
 const uint8_t CapteurHumiditeTemperatureExterieurPIN = 2; // pin capteur humidite
@@ -81,7 +80,7 @@ const long serialRate=    38400;
 //reglages
 const byte intervalleEnregistrement = 60 ; // en secondes
 const byte intervalleAffichage = 1 ; // en secondes
-const byte nbCommandeSwitch = 5 ;
+const byte nbCommandeSwitch = 5 ;    // we send cmd  5* because we dont have confirmation
 const int humidificateurMarche = 5393 ;
 const int humidificateurArret = 5396 ;
 const int refroidissementMarche = 4433 ;
@@ -207,6 +206,7 @@ byte secondes = 0 ;
 
 void setup(void)
 {
+
   Wire.begin ( ) ;
   telecommande.enableTransmit ( pinTelecommande ) ;
   commandeSwitch ( humidificateurArret ) ;
@@ -216,11 +216,17 @@ void setup(void)
   Serial1.begin ( serial1Rate ) ;
   Serial.begin ( serialRate ) ;
 
+
   while ( !Serial )
   {
     ; // wait for serial port to connect. Needed for Leonardo only
   }
   Serial.println ( "Debut de l'init" ) ;
+
+  // alimentation DS18B20 par pin 41
+  pinMode(41, OUTPUT);
+  digitalWrite(41, HIGH);
+  Serial.println ( "alimentation DS18B20 par pin 41" ) ;
 
   // I fill info on sketch
   sketchInfo.setFileDateTime(F(__FILE__), F(__DATE__), F(__TIME__));
@@ -325,7 +331,11 @@ void setup(void)
 void loop ( )
 {
   Temps = millis ( ) ;
-  releveRTC ( ) ; //on releve date et heure sur l'horloge RTC
+
+  //on releve date et heure sur l'horloge RTC
+  releveRTC ( ) ;
+
+  // temperature
   mesureTemperature18B20 ( ) ;
 
   // enregistrement regulier
@@ -360,18 +370,11 @@ void loop ( )
   {
     secondesAffichagePrecedent = secondes ;
     releveValeurs ( ) ;
-//    EnregistrementFichierMesure ( ) ; // on enregistre dans le fichier que 1/mn
     FonctionTexteTrameMesures ( ) ;
-//    afficheLCDregulier ( ) ;
     affichageUsbSecondes ( ) ;
     affichageSerieRaspSecondes ( ) ;
   }
 
-
-  //*********************************
-  // gestion du menu  deuligne
-  //*********************************
-//  gestionMenuDeuligne();
 
 
   //*********************************
@@ -385,14 +388,15 @@ void loop ( )
   asserveTemperature();
 
 
-  serListenerTH.checkMessageReceived();
+  //*********************************
+  //     lecture cmd par serial
+  //*********************************
+
+  serListener.checkMessageReceived();
 
 #if (CFG_MAT == CFG_CPLT)
   lectureSerialUSB_PM();
 #endif
-
-  // Lecture port serie RasbPi  -->  remplace par serListenerTH
-//  lectureSerialRaspi_PM() ;
 
 }   // loop
 
@@ -440,43 +444,6 @@ int lectureSerialUSB_PM()
     return 0;
 }
 
-// Lecture port serie RasbPi
-int lectureSerialRaspi_PM()
-{
-    // pas de communication en cours, on s en va de suite
-    if ( Serial1.available ( ) <= 0 )
-        return 0;
-
-    delay(10); // give some time to receive msg
-    String messageRecuRaspi = "" ;
-    while ( Serial1.available ( ) > 0)
-    {
-        char lecturePortSerieRaspi = Serial1.read ( ) ;
-        messageRecuRaspi = String ( messageRecuRaspi + lecturePortSerieRaspi ) ;
-    }
-    Serial.print ( "messageRecu =>" ) ;   // send an initial string
-    Serial.print ( messageRecuRaspi ) ;   // send an initial string
-    Serial.println ( "<=" ) ;   // send an initial string
-    if ( messageRecuRaspi == commandeLectureFichierConsignes )
-    {
-        dumpRasp ( NomFichierConsignes ) ;
-    }
-    if ( messageRecuRaspi == commandeLectureFichierMesure )
-    {
-        dumpRasp ( NomFichierMesure ) ;
-    }
-    if ( messageRecuRaspi == commandeLectureFichierCommandes )
-    {
-        dumpRasp ( NomFichierCommandes ) ;
-    }
-    if ( messageRecuRaspi == "st" )
-    {
-        affichageSerieRaspSecondes() ;
-    }
-    messageRecuRaspi = "" ;
-
-    return 0;
-}
 
 //fonction permettant de transformer un integer en chaine de 2 caracteres ( zero en premier par defaut )
 String numeroDix ( int valeur )
@@ -592,7 +559,9 @@ int litConsigneFichier(int &consigneTemp, int &consigneHum)
     else
     {
         erreur ( 5 ) ;  //non lecture fichier consigne sur carte SD
+        return 5;
     }
+    return 0;
 }
 
 void releveValeurs ( void )
@@ -644,36 +613,7 @@ void releveValeurs ( void )
   {
     humiditeExterieureEntiere = event.relative_humidity ;
   }
-  /*  if ( HTU21 )
-    {
-    //    temperatureInterieureEntiere = int ( htu.readTemperature ( ) ) ;
-    float
-
-
-
-
-      //humiditeInterieureEntiere = int ( htu.readHumidity ( ) ) ;
-    }
-    else
-    {
-      temperatureInterieureEntiere = 00 ;
-      humiditeInterieureEntiere = 00 ;
-    }
-  */
 }
-
-void afficheLCDregulier ( void )
-{
-  afficheLCD ( numeroDix ( temperatureInterieureEntiere ) , 0 , 0 ) ;
-  lcd.setCursor ( 2 , 0 ) ;
-  lcd.write ( 0 ) ;
-  afficheLCD ( "C" , 3 , 0 ) ;
-  afficheLCD ( dateString , 6 , 0 ) ;
-  afficheLCD ( numeroDix ( humiditeInterieureEntiere ) , 0 , 1 ) ;
-  afficheLCD ( "%" , 2 , 1 ) ;
-  afficheLCD ( heureString , 8 , 1 ) ;
-}
-
 
 
 
@@ -824,76 +764,26 @@ void dumpRasp ( String nomFichier )
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+// envoie  commande radio.  valeur indique quelle cmd est envoyee
 void commandeSwitch ( int valeur )
 {
   for ( byte boucle = 0 ; boucle < nbCommandeSwitch ; boucle ++ )
   {
-    telecommande.send ( valeur , 24 ) ; // marche
+    telecommande.send ( valeur , 24 ) ;
   }
 }
 
+
 void affichageUsbSecondes ( void )
 {
-
   Serial.print ( fmt1CmdMqtt (topicMesure, TrameMesures) ) ;
-  /*
-    Serial.print ( "Date = " ) ;
-    Serial.println ( dateString ) ;
-    Serial.print("Heure = ");
-    Serial.println ( heureString ) ;
-    Serial.print("Temperature int = ");
-    Serial.println(temperatureInterieureEntiere);
-    Serial.print("Humidite int = ");
-    Serial.println(humiditeInterieureEntiere);
-    Serial.print("Temperature ext = ");
-    Serial.println(temperatureExterieureEntiere);
-    Serial.print("Humidite ext = ");
-    Serial.println(humiditeExterieureEntiere);
-    Serial.println ( emission ) ;
-    for ( byte boucle = nbCapteurs ; boucle > 0 ; boucle -- )
-    {
-    Serial.print( "Temperature Dallas N° " ) ;
-    Serial.print ( boucle ) ;
-    Serial.print ( " = " ) ;
-    Serial.println ( String ( Dallas [ boucle - 1 ] ) ) ;
-    }*/
 }
 
 void affichageSerieRaspSecondes ( void )
 {
   Serial1.print ( fmt1CmdMqtt (topicMesure, TrameMesures) ) ;
-  /*  Serial1.print ( "Date = " ) ;
-    Serial1.println ( dateString ) ;
-    Serial1.print("Heure = ");
-    Serial1.println ( heureString ) ;
-    Serial1.print("Temperature int = ");
-    Serial1.println(temperatureInterieureEntiere);
-    Serial1.print("Humidite int = ");
-    Serial1.println(humiditeInterieureEntiere);
-    Serial1.print("Temperature ext = ");
-    Serial1.println(temperatureExterieureEntiere);
-    Serial1.print("Humidite ext = ");
-    Serial1.println(humiditeExterieureEntiere);
-    Serial1.println ( emission ) ;
-    for ( byte boucle = nbCapteurs ; boucle > 0 ; boucle -- )
-    {
-      Serial1.print( "Temperature Dallas N° " ) ;
-      Serial1.print ( boucle ) ;
-      Serial1.print ( " = " ) ;
-      Serial1.println ( Dallas [ boucle - 1 ] ) ;
-    }*/
 }
+
 
 void FonctionTexteTrameMesures ( void )
 {
@@ -1124,123 +1014,3 @@ void asserveTemperature()
 }   // asserveTemperature
 
 
-
-void gestionMenuDeuligne()
-{
-    // lecture commande stick
-//    unsigned int valeurStick = analogRead ( pinStick ) ;
-    unsigned int valeurStick = 350 ;   // valeur inactive
-    if ( valeurStick < 1013 )
-    {
-      debutMenu = millis ( ) ;
-      if ( ! menu )
-      {
-        //Serial.println ( "entree menu" ) ;
-        afficheLCD ( effacement , 0 , 0 ) ;
-        afficheLCD ( "Reglages" , 4 , 0 ) ;
-        afficheLCD ( effacement , 0 , 1 ) ;
-        afficheLCD ( String ( consigneTemp ) , 0 , 1 ) ;
-        lcd.write ( 0 ) ;
-        lcd.print ( "C" ) ;
-        afficheLCD ( "C" , 3 , 1 ) ;
-        afficheLCD ( String ( consigneHum ) , 13 , 1 ) ;
-        afficheLCD ( "%" , 15, 1 ) ;
-        afficheLCD ( "" , 7, 1 ) ;
-        lcd.blink ( ) ;
-        menu = true ;
-        consigneTempProvisoire = consigneTemp ;
-        consigneHumProvisoire = consigneHum ;
-      }
-
-      if ( valeurStick < 10 && selection ) // droite
-      {
-        lcd.setCursor ( 15 , 1 ) ;
-        reglageHum = true ;
-        reglageTemp = false ;
-      }
-
-      if ( 665 < valeurStick && valeurStick < 685 && selection  ) // gauche
-      {
-        lcd.setCursor ( 2 , 1 ) ;
-        reglageHum = false ;
-        reglageTemp = true ;
-      }
-
-      if ( 241 < valeurStick && valeurStick < 261 && selection  ) // haut
-      {
-        if ( reglageTemp )
-        {
-          consigneTempProvisoire ++ ;
-          lcd.setCursor ( 0 , 1 ) ;
-          lcd.print ( numeroDix ( consigneTempProvisoire ) ) ;
-        }
-        if ( reglageHum )
-        {
-          consigneHumProvisoire ++ ;
-          lcd.setCursor ( 13 , 1 ) ;
-          lcd.print ( numeroDix ( consigneHumProvisoire ) ) ;
-        }
-        selection = false ;
-      }
-
-      if ( 487 < valeurStick && valeurStick < 504 && selection  ) // bas
-      {
-        if ( reglageTemp )
-        {
-          consigneTempProvisoire -- ;
-          lcd.setCursor ( 0 , 1 ) ;
-          lcd.print ( numeroDix ( consigneTempProvisoire ) ) ;
-        }
-
-        if ( reglageHum )
-        {
-          consigneHumProvisoire -- ;
-          lcd.setCursor ( 13 , 1 ) ;
-          lcd.print ( numeroDix ( consigneHumProvisoire ) ) ;
-        }
-        selection = false ;
-      }
-
-      if ( 850 < valeurStick && valeurStick < 870 && selection && ! validation ) // appuye
-      {
-        //enregistre les consignes
-        consigneHum = consigneHumProvisoire ;
-        consigneTemp = consigneTempProvisoire ;
-        validation = true ;
-        //Serial.println ( "appuye" ) ;
-      }
-    }
-
-    if ( menu && ! selection && (valeurStick > 1013) )
-    {
-      selection = true ;
-      //Serial.println ( "selection" ) ;
-    }
-
-    if ( menu && selection && validation && (valeurStick > 1013) )
-    {
-      menu = false ;
-      selection = false ;
-      validation = false ;
-      //Serial.println ( "enregistre" ) ;
-      lcd.noBlink ( ) ;
-      lcd.setCursor ( 0 , 0 ) ;
-      lcd.print ( effacement ) ;
-      lcd.setCursor ( 0 , 1 ) ;
-      lcd.print ( effacement ) ;
-      lcd.setCursor ( 1 , 0 ) ;
-      lcd.print ( "Enregistrement" ) ;
-      delay ( 2000 ) ;
-
-      ecritConsigneDansFichier();
-      sendConsigne();
-
-      lcd.setCursor ( 0 , 0 ) ;
-      lcd.print ( effacement ) ;
-      lcd.setCursor ( 3 , 0 ) ;
-      lcd.print ( "Enreg. OK" ) ;
-      delay ( 2000 ) ;
-      lcd.setCursor ( 0 , 0 ) ;
-      lcd.print ( effacement ) ;
-    }
-}   // gestionMenuDeuligne

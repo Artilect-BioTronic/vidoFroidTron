@@ -76,7 +76,7 @@ extern byte humiditeExterieureEntiere ;
 
 
 // liste des variables dans le fichier TempHumMsg.cpp
-extern SerialListener serListenerTH;
+extern SerialListener serListener;
 
 // list of available commands (user) that the arduino will accept
 extern CommandList cmdLUserPhy;  // ("cmdUser", "CM+", SIZE_OF_TAB(cmdUserPhy), cmdUserPhy );

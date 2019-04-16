@@ -8,7 +8,7 @@
 
 #include <DS1307RTC.h>
 
-SerialListener serListenerTH(SERIAL_MSG);
+SerialListener serListener(SERIAL_MSG);
 
 // list of available commandes (system ctrl) that the arduino will accept
 // example:  int sendSketchId(const String& dumb);
@@ -55,9 +55,9 @@ CommandList cmdLSD("cmdSD", "SD+", SIZE_OF_TAB(cmdSD), cmdSD );
 // This function has to be added in setup()
 int setupTempHumMsg()
 {
-    serListenerTH.addCmdList(cmdLUserPhy);
-    serListenerTH.addCmdList(cmdLSysPhy);
-    serListenerTH.addCmdList(cmdLSD);
+    serListener.addCmdList(cmdLUserPhy);
+    serListener.addCmdList(cmdLSysPhy);
+    serListener.addCmdList(cmdLSD);
 
     // following line is copied in main sketch.ino file
     // I fill info on sketch
@@ -209,7 +209,7 @@ float FilterLastDigit::update(float aNewVal)
     //  on accepte la  aNewVal  seulement au bout de  _nbDiffStep  fois
     else if (fabs(_value-aNewVal) > _noDiffStep)   {
         _nbDiff++ ;
-        Serial.println(String("filter small diff nb: ") + _nbDiff);
+//        Serial.println(String("filter small diff nb: ") + _nbDiff);
         // Si le changement de valeur est assez frequent, on l accepte
         if (_nbDiff >= _nbDiffMin)   {
             _value = aNewVal;
@@ -223,7 +223,7 @@ float FilterLastDigit::update(float aNewVal)
         else
             _nbDiff = _nbDiff - 2 ;  // on diminue le compte de valeurs differentes rapidement
         // la valeur precedente n est pas modifiee
-        Serial.println(String("filter no diff, nb: ") + _nbDiff);
+//        Serial.println(String("filter no diff, nb: ") + _nbDiff);
     }
 
     return _value;
