@@ -109,17 +109,17 @@ boolean validation = false ;
 unsigned long debutMenu = 0 ;
 boolean reglageTemp = false ;
 boolean reglageHum = false ;
-int consigneTemp = 20 ;
-int consigneTempProvisoire = 20 ;
+//int consigneTemp = 20 ;
 byte plageTemp = 1 ;
-int consigneHum = 50 ;
-int consigneHumProvisoire = 50 ;
+//int consigneHum = 50 ;
 byte plageHum = 5 ;
 //bool commandeChauffage = false ;  // use chauffage.isOn()
 bool commandeRefroidissement = false ;
 bool commandeHum = false ;
 Chauffage chauffage(pinRad1, pinRad2, pinFan, 50);
 
+ScheduledCsgn consigneTemp(20);
+ScheduledCsgn consigneHum(50);
 
 //Génération des trames
 String TrameMesures = "" ;
@@ -267,7 +267,8 @@ void setup(void)
     }
 
     // je recupere la consigne en lisant la derniere ligne du fichier de csgn
-    litConsigneFichier(consigneTemp, consigneHum);
+    consigneTemp.readCsgnFile();
+    consigneHum.readCsgnFile();
 
     // je recopie la consigne actuelle dans le fichier (que je viens de lire)
     File regFileEcriture = SD.open ( NomFichierConsignes , FILE_WRITE ) ;
@@ -337,6 +338,13 @@ void loop ( )
 
   // temperature
   mesureTemperature18B20 ( ) ;
+
+  // tracing: on previent a chaque changement de valeur de consigne
+  static float lastTempCsgn = consigneTemp.get();
+  if (fabs(consigneTemp.get() - lastTempCsgn) > 0.1)   {
+      sendConsigne();
+      lastTempCsgn = consigneTemp.get();
+  }
 
   // enregistrement regulier
   //   (on en profite pour repeter les consignes)
@@ -519,8 +527,8 @@ String getTrameConsigne() {
     // String(floatValue)  will convert float to String with format %0.2f
     sTrame = dateString   +separateurFichier+
              heureString  +separateurFichier+
-             String ( consigneTemp )  +separateurFichier+
-             String ( consigneHum );
+             String ( consigneTemp.get() )  +separateurFichier+
+             String ( consigneHum.get() );
     return sTrame;
 }
 
@@ -832,7 +840,7 @@ void EnregistrementFichierMesure ( void )
 void asserveHumidite()
 {
     // Humidite prise " D"
-    if ( (humiditeInterieureEntiere < ( consigneHum - plageHum )) & ! commandeHum )
+    if ( (humiditeInterieureEntiere < ( consigneHum.get() - plageHum )) & ! commandeHum )
     {
       //telecommande.send ( 5393 , 24 ) ; // marche
       commandeSwitch ( humidificateurMarche ) ;
@@ -861,7 +869,7 @@ void asserveHumidite()
         erreur ( 12 ) ;
       }
     }
-    if ( (humiditeInterieureEntiere > consigneHum) & commandeHum )
+    if ( (humiditeInterieureEntiere > consigneHum.get()) & commandeHum )
     {
       //telecommande.send ( 5396 , 24 ) ; // arret
       commandeSwitch ( humidificateurArret ) ;
@@ -898,7 +906,7 @@ void asserveTemperature()
     // Attention, On ne veut pas que le refroidissement du frigo ne declenche le chauffage
     //   ici on penalise le chauffage car on est en ete
     // Chauffage prise " A "
-    if ( temperatureInterieureEntiere < ( consigneTemp - plageTemp*3 ) && chauffage.isOff() )
+    if ( temperatureInterieureEntiere < ( consigneTemp.get() - plageTemp*3 ) && chauffage.isOff() )
     {
       chauffage.switchOn();
 
@@ -926,7 +934,7 @@ void asserveTemperature()
       }
     }
 
-    if ( temperatureInterieureEntiere > ( consigneTemp + plageTemp ) && chauffage.isOn() )
+    if ( temperatureInterieureEntiere > ( consigneTemp.get() + plageTemp ) && chauffage.isOn() )
     {
       chauffage.switchOff();
 
@@ -955,7 +963,7 @@ void asserveTemperature()
     }
 
     // Refroidissement prise " B "
-    if ( temperatureInterieureEntiere > ( consigneTemp + plageTemp*2 ) && ! commandeRefroidissement )
+    if ( temperatureInterieureEntiere > ( consigneTemp.get() + plageTemp*2 ) && ! commandeRefroidissement )
     {
       commandeSwitch ( refroidissementMarche ) ;
       commandeRefroidissement = true ;
@@ -983,7 +991,7 @@ void asserveTemperature()
         erreur ( 16 ) ;
       }
     }
-    if ( temperatureInterieureEntiere < ( consigneTemp - plageTemp*2. ) && commandeRefroidissement )
+    if ( temperatureInterieureEntiere < ( consigneTemp.get() - plageTemp*2. ) && commandeRefroidissement )
     {
       commandeSwitch ( refroidissementArret ) ;
       commandeRefroidissement = false ;

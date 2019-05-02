@@ -152,7 +152,7 @@ int updateHumCsgn(const CommandList& aCL, Command &aCmd, const String& aInput)
         return aCL.returnKO(aCmd, parsedCmd);
 
 
-    consigneHum = iValue;
+    consigneHum.setFixedCsgn(iValue);
 
     ecritConsigneDansFichier();
 
@@ -181,7 +181,7 @@ int updateTempCsgn(const CommandList& aCL, Command &aCmd, const String& aInput)
         return aCL.returnKO(aCmd, parsedCmd);
 
 
-    consigneTemp = iValue;
+    consigneTemp.setFixedCsgn(iValue);
 
     ecritConsigneDansFichier();
 
@@ -209,7 +209,7 @@ float FilterLastDigit::update(float aNewVal)
     //  on accepte la  aNewVal  seulement au bout de  _nbDiffStep  fois
     else if (fabs(_value-aNewVal) > _noDiffStep)   {
         _nbDiff++ ;
-//        Serial.println(String("filter small diff nb: ") + _nbDiff);
+//        SERIAL_MSG.println(String("filter small diff nb: ") + _nbDiff);
         // Si le changement de valeur est assez frequent, on l accepte
         if (_nbDiff >= _nbDiffMin)   {
             _value = aNewVal;
@@ -223,7 +223,7 @@ float FilterLastDigit::update(float aNewVal)
         else
             _nbDiff = _nbDiff - 2 ;  // on diminue le compte de valeurs differentes rapidement
         // la valeur precedente n est pas modifiee
-//        Serial.println(String("filter no diff, nb: ") + _nbDiff);
+//        SERIAL_MSG.println(String("filter no diff, nb: ") + _nbDiff);
     }
 
     return _value;
@@ -238,14 +238,12 @@ float FilterDallas::update(float aval)
     // ou un 0.
     // j elimine une bonne partie avec des bornes [-50.; 84.]
     if ( (aval < -50.) || (aval > 84.) )   {
-        Serial.println(String("temp Dallas rejetee: ") + aval);
-        Serial1.println(String("temp Dallas rejetee: ") + aval);
+        SERIAL_MSG.println(String("temp Dallas rejetee: ") + aval);
         // on garde l ancienne  _value
     }
     else if ( fabs(aval) < 0.1)
     {
-        Serial.println(String("temp Dallas rejetee: ") + aval);
-        Serial1.println(String("temp Dallas rejetee: ") + aval);
+        SERIAL_MSG.println(String("temp Dallas rejetee: ") + aval);
         // on garde l ancienne  _value
     }
     else
@@ -298,4 +296,108 @@ void fakeReleveValeurs()
     humiditeInterieureEntiere = 41 ;
     temperatureExterieureEntiere = 28 ;
     humiditeExterieureEntiere = 62 ;
+}
+
+ScheduledCsgn::ScheduledCsgn(float initCsgn): _nbPoints(0), _currentVal(initCsgn),
+                _isCsgnFixed(true), _csgnFilename("")
+{
+
+}
+
+// read time from  DS1307RTC.h  and converts to seconds from midnight (0H)
+unsigned long ScheduledCsgn::getSecondSince0H ( void )
+{
+    tmElements_t tm;
+    if ( RTC.read ( tm ) )
+        return tm.Hour*3600 + tm.Minute*60 + tm.Second;
+    else
+        return 0;
+}
+
+// erase old schedule
+int ScheduledCsgn::copyEraseSchedule(int nbPoints, unsigned long listTime[],
+                                     float listCsgn[])
+{
+    int nbMax = nbPoints;
+
+    // silly input
+    if (nbPoints <=0)
+        return -1;
+
+    // display only a warning if too many points
+    if (nbPoints > _MAX_POINTS)   {
+        nbMax = _MAX_POINTS;
+        SERIAL_MSG.println(String(F("Warning max points is: "))+_MAX_POINTS);
+    }
+
+    _nbPoints = nbMax;
+
+    for (int i=0; i<_nbPoints; i++)   {
+        _listPtTime[i] = listTime[i];
+        _listPtVal[i]  = listCsgn[i];
+    }
+
+    return _nbPoints;
+}
+
+int ScheduledCsgn::checkCsgnFromTimedSchedule()   {
+    if (_nbPoints == 0)   {
+        SERIAL_MSG.println(F("no schedule available; csgn not modified"));
+        return 1;
+    }
+
+    unsigned long now_s = getSecondSince0H();
+
+    // We check _indTime is in bounds
+    if (_indTime > _nbPoints-1)   _indTime = _nbPoints-1;
+
+    // (if _indTime is low) we increase _indTime
+    while ( (_indTime < _nbPoints-1) && (_listPtTime[_indTime+1] > now_s) )
+        _indTime++;
+    // (if _indTime is high) we decrease _indTime
+    while ( (_indTime > 0) && (_listPtTime[_indTime] > now_s) )
+        _indTime-- ;
+
+    // if now  is before  1st point, we take  value  from last point
+    if ((_listPtTime[_indTime] > now_s)  && (_indTime == 0) )
+        _currentVal = _listPtVal[_nbPoints-1];
+    else
+        _currentVal = _listPtVal[_indTime];
+
+    return 0;
+}
+
+float ScheduledCsgn::get()   {
+    // if the csgn is on schedule, we may update the csgn
+    if (! _isCsgnFixed)   {
+        // I want that update is made at most  _periodUpdateCsgn_ms
+        static unsigned long lastUpdate=0;
+        if (millis() - lastUpdate > _periodUpdateCsgn_ms)
+            checkCsgnFromTimedSchedule();
+    }
+    return _currentVal;
+}
+
+int ScheduledCsgn::setCsgnAsFixed(boolean isFixed)   {
+    // passing in fixed mode
+    if (isFixed)   {
+        // the current value (that surely corresponds to schedule) is now the fixed value
+        _isCsgnFixed = true;
+        return 0;
+    }
+    else   {  // passing in (not fixed) scheduled mode
+        // we cannot pass in scheduled,  there is no schedule available
+        if (_nbPoints == 0)   {
+            SERIAL_MSG.println(F("no schedule available; csgn stays Fixed"));
+            return 1;
+        }
+        checkCsgnFromTimedSchedule();
+        _isCsgnFixed = false;
+    }
+    return 0;
+}
+
+int ScheduledCsgn::readCsgnFile()   {
+    SERIAL_MSG.println(F("readCsgnFile not implemented"));
+    return 0;
 }

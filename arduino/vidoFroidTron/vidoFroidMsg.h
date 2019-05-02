@@ -65,9 +65,11 @@ int updateTempCsgn(const CommandList& aCL, Command &aCmd, const String& aInput);
 void     fakeReleveValeurs();
 
 
-// liste des variables globales definies dans le fichier TempHumDeligne.ino
-extern int consigneTemp;
-extern int consigneHum ;
+class ScheduledCsgn;    // forward declaration
+
+// liste des variables globales definies dans le fichier principal .ino
+extern ScheduledCsgn consigneTemp;
+extern ScheduledCsgn consigneHum ;
 
 extern byte temperatureInterieureEntiere ;
 extern byte humiditeInterieureEntiere ;
@@ -146,6 +148,35 @@ public:
     int switchOff(void);
     boolean isOn(void)   {return _isOn;}
     boolean isOff(void)   {return ! _isOn;}
+};
+
+
+class ScheduledCsgn
+{
+private:
+    static const uint8_t _MAX_POINTS = 10;
+    static const unsigned long _periodUpdateCsgn_ms = 100;
+    uint8_t _nbPoints;
+    unsigned long _listPtTime[_MAX_POINTS];
+    float _listPtVal[_MAX_POINTS];
+    float _currentVal;
+    boolean _isCsgnFixed;
+    String _csgnFilename;
+    uint8_t _indTime;
+
+// static functions
+// they may depend on extern  Hardware  !!
+public:
+    static unsigned long getSecondSince0H();  // use  DS1307RTC.h  library
+
+public:
+    ScheduledCsgn(float initCsgn=15.);
+    void setFixedCsgn(float csgn)   { _currentVal = csgn;   _isCsgnFixed = true; }
+    int setCsgnAsFixed(boolean isFixed);
+    float get();
+    int copyEraseSchedule(int nbPoints, unsigned long listTime[], float listCsgn[]);
+    int readCsgnFile();
+    int checkCsgnFromTimedSchedule();
 };
 
 #endif // VIDOFROIDMSG_H
