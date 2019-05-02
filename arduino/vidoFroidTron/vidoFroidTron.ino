@@ -79,7 +79,6 @@ const long serialRate=    38400;
 
 //reglages
 const byte intervalleEnregistrement = 60 ; // en secondes
-const byte intervalleAffichage = 1 ; // en secondes
 const byte nbCommandeSwitch = 5 ;    // we send cmd  5* because we dont have confirmation
 const int humidificateurMarche = 5393 ;
 const int humidificateurArret = 5396 ;
@@ -89,24 +88,6 @@ const int refroidissementArret = 4436 ;
 //const int chauffageArret = 1364 ;
 
 
-// DeuLigne
-byte degres[8] =
-{
-  B00100,
-  B01010,
-  B01010,
-  B00100,
-  B00000,
-  B00000,
-  B00000
-} ;
-Deuligne lcd ;
-const String effacement = "                " ;
-// variables et constantes pour menu
-boolean menu = false ;
-boolean selection = false ;
-boolean validation = false ;
-unsigned long debutMenu = 0 ;
 boolean reglageTemp = false ;
 boolean reglageHum = false ;
 //int consigneTemp = 20 ;
@@ -164,14 +145,6 @@ DHT_Unified CapteurHumiditeTemperatureInterieur( CapteurHumiditeTemperatureInter
 OneWire  Ds18b20 ( PinOneWire ) ;
 const byte nbCapteurs = 3 ;
 FilterDallas dallasFiltered[ nbCapteurs ] = {15., 15., 15.} ;
-//byte present = 0;
-//byte type_s;
-//byte data[12];
-//byte addr[8];
-//byte noCapteur = 0 ; // pour éventuellement compter le nombre de capteurs
-//byte i=0;
-//byte phase = 0 ;
-//int mesure = 0 ;
 unsigned long Temps = 0 ;
 unsigned long TempsMesure = 0 ;
 unsigned long TempsEnregistrement = 0 ;
@@ -188,9 +161,6 @@ byte temperatureInterieureEntiere ;
 byte humiditeInterieureEntiere ;
 byte temperatureExterieureEntiere ;
 byte humiditeExterieureEntiere ;
-String heuresDix ;
-String minutesDix ;
-String secondesDix ;
 String heureString ;
 String dateString ;
 unsigned long tempsEnregistrement = 0 ;
@@ -198,11 +168,7 @@ byte minutes = 0 ;
 byte secondesAffichagePrecedent = 0 ;
 byte secondes = 0 ;
 
-// Variables pour communication serie
-//char lecturePortSerie ;
-//String messageRecu = "" ;
-//String messageRecuUSB = "" ;
-//String messageRecuRaspi = "" ;
+
 
 void setup(void)
 {
@@ -496,12 +462,6 @@ void releveRTC ( void )
   }
 }
 
-//fonction d'affichage LCD
-void afficheLCD ( String texte , unsigned int positionColonne , boolean ligne  )
-{
-  lcd.setCursor ( positionColonne , ligne ) ;
-  lcd.print ( texte ) ;
-}
 
 int sendConsigne()   {
     String sTrame = getTrameConsigne();
