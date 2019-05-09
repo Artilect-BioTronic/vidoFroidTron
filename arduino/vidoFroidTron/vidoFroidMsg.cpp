@@ -19,7 +19,12 @@ Command cmdUser[] = {
     Command("csgn/humidity/cmd",    &updateHumCsgn,     "i",    "1-90"),
     Command("csgn/temp/cmd",        &updateTempCsgn,    "i",    "-5-50"),
     Command("setDate",              &setDate,   "i,i,i,i,i,i",  "1900-2100,1-12,,0-23,,"),
-    Command("sendDate",             &getDate)
+    Command("sendDate",             &getDate),
+    Command("csgn/temp/schedule",   &updateTempSchedule, "s"),
+    Command("csgn/temp/adPtSched",  &addPointTempSchedule, "i,i,i,f", "0-23,0-59,-1-59,-5-50"),
+    Command("csgn/temp/rmPtSched",  &rmPointTempSchedule,  "i,i,i",   "-1-23,0-59,0-59"),
+    Command("csgn/temp/isFixed",    &tempIsFixedOrScheduled, "s", "yes|no|ask"),
+    Command("csgn/temp/status",     &tempCsgnStatus,    "s",    "csgn|all")
 };
 CommandList cmdLUserPhy("cmdUser", "CM+", SIZE_OF_TAB(cmdUser), cmdUser );
 
@@ -194,6 +199,174 @@ int updateTempCsgn(const CommandList& aCL, Command &aCmd, const String& aInput)
 }
 
 
+// "s" , the format is checked with function beneath
+// format is  nbPointN;h0:m0:s0;csgn0;h1:m1:s1;csgn1 ... hN:mN:sN;csgnN
+int updateTempSchedule(const CommandList& aCL, Command &aCmd, const String& aInput)
+{
+    ParsedCommand parsedCmd(aCL, aCmd, aInput);
+
+    // verify that msg with arguments is OK with format and limit
+    if (parsedCmd.verifyFormatMsg(aCmd, aInput) != ParsedCommand::NO_ERROR)
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    // get values
+    String sValue = parsedCmd.getValueStr(1);
+
+    // we check that parsedCmd has not detected any error
+    if (parsedCmd.hasError())
+        return aCL.returnKO(aCmd, parsedCmd);
+
+
+    int ret = consigneTemp.copyEraseScheduleString(sValue);
+
+    if (ret >= 0)
+    // I send back OK msg
+        aCL.msgOK(aInput, "");
+    else
+        aCL.msgKO(aInput, ret);
+
+    return 0;
+}
+
+// "i,i,i,f",   "0-23,0-59,-1-59,-5-50"
+// to erase schedule, you can send -1 in field second
+int addPointTempSchedule(const CommandList& aCL, Command &aCmd, const String& aInput)
+{
+    ParsedCommand parsedCmd(aCL, aCmd, aInput);
+
+    // verify that msg with arguments is OK with format and limit
+    if (parsedCmd.verifyFormatMsg(aCmd, aInput) != ParsedCommand::NO_ERROR)
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    // get values
+    int ih = parsedCmd.getValueInt(1);
+    int im = parsedCmd.getValueInt(2);
+    int is = parsedCmd.getValueInt(3);
+    float fValue = parsedCmd.getValueFloat(4);
+
+    // we check that parsedCmd has not detected any error
+    if (parsedCmd.hasError())
+        return aCL.returnKO(aCmd, parsedCmd);
+
+
+    int ret = consigneTemp.addPointSchedule(ih, im, is, fValue);
+
+    if (ret >= 0)
+    // I send back OK msg
+        aCL.msgOK(aInput, ret);
+    else
+        aCL.msgKO(aInput, ret);
+
+    return 0;
+}
+
+// "i,i,i",   "0-23,0-59,-1-59"
+// to erase whole schedule, you can send -1 in field second
+int rmPointTempSchedule(const CommandList& aCL, Command &aCmd, const String& aInput)
+{
+    ParsedCommand parsedCmd(aCL, aCmd, aInput);
+
+    // verify that msg with arguments is OK with format and limit
+    if (parsedCmd.verifyFormatMsg(aCmd, aInput) != ParsedCommand::NO_ERROR)
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    // get values
+    int ih = parsedCmd.getValueInt(1);
+    int im = parsedCmd.getValueInt(2);
+    int is = parsedCmd.getValueInt(3);
+
+    // we check that parsedCmd has not detected any error
+    if (parsedCmd.hasError())
+        return aCL.returnKO(aCmd, parsedCmd);
+
+
+    int ret = consigneTemp.rmPointSchedule(ih, im, is);
+
+    if (ret >= 0)
+    // I send back OK msg
+        aCL.msgOK(aInput, ret);
+    else
+        aCL.msgKO(aInput, ret);
+
+    return 0;
+}
+
+// "s" , "yes|no|ask"
+int tempIsFixedOrScheduled(const CommandList& aCL, Command &aCmd, const String& aInput)
+{
+    ParsedCommand parsedCmd(aCL, aCmd, aInput);
+
+    // verify that msg with arguments is OK with format and limit
+    if (parsedCmd.verifyFormatMsg(aCmd, aInput) != ParsedCommand::NO_ERROR)
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    // get values
+    String sValue = parsedCmd.getValueStr(1);
+
+    // we check that parsedCmd has not detected any error
+    if (parsedCmd.hasError())
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    int ret = 0;
+    if (sValue.equals("yes"))
+        ret = consigneTemp.setCsgnAsFixedOrNot(true);
+    else if (sValue.equals("no"))
+        ret = consigneTemp.setCsgnAsFixedOrNot(false);
+    else   {
+        aCL.msgOK(aInput, String(consigneTemp.isCsgnFixed()) );
+        return 0;
+    }
+
+    if (ret == 0)
+    // I send back OK msg
+        aCL.msgOK(aInput, "");
+    else
+        aCL.msgKO(aInput, ret);
+
+    return 0;
+}
+
+// "s",    "csgn|all"
+int tempCsgnStatus(const CommandList& aCL, Command &aCmd, const String& aInput)
+{
+    ParsedCommand parsedCmd(aCL, aCmd, aInput);
+
+    // verify that msg with arguments is OK with format and limit
+    if (parsedCmd.verifyFormatMsg(aCmd, aInput) != ParsedCommand::NO_ERROR)
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    // get values
+    String sValue = parsedCmd.getValueStr(1);
+
+    // we check that parsedCmd has not detected any error
+    if (parsedCmd.hasError())
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    if (sValue.equals("csgn"))
+        sendConsigne();
+    else   {
+        sendConsigne();
+        aCL.msgPrint( String("isCsgnFixed: ") + consigneTemp.isCsgnFixed() );
+        int nbPoints=0;
+        unsigned long listTime[ScheduledCsgn::_MAX_POINTS];
+        float listCsgn[ScheduledCsgn::_MAX_POINTS];
+        consigneTemp.getSchedule(nbPoints, listTime, listCsgn);
+        aCL.msgPrint( aCL.getCommand(aInput) + "/SchedNbPt/:" + nbPoints);
+        for (int i=0; i<nbPoints; i++)
+            aCL.msgPrint( aCL.getCommand(aInput) + "/pt/" +i+": " +
+                          listTime[i] / 3600 + ":" +
+                          (listTime[i] % 3600) / 60 + ":" +
+                          listTime[i] % 60 + ";" +
+                          listCsgn[i]
+                          );
+    }
+
+    // I send back OK msg
+    aCL.msgOK(aInput, "");
+
+    return 0;
+}
+
 /*---------------------------------------------------------------*/
 /*       classes pour filtrer                                    */
 /*---------------------------------------------------------------*/
@@ -309,12 +482,12 @@ unsigned long ScheduledCsgn::getSecondSince0H ( void )
 {
     tmElements_t tm;
     if ( RTC.read ( tm ) )
-        return tm.Hour*3600 + tm.Minute*60 + tm.Second;
+        return tm.Hour*3600UL + tm.Minute*60 + tm.Second;
     else
         return 0;
 }
 
-// erase old schedule
+// erase old schedule and  write new one
 int ScheduledCsgn::copyEraseSchedule(int nbPoints, unsigned long listTime[],
                                      float listCsgn[])
 {
@@ -340,9 +513,283 @@ int ScheduledCsgn::copyEraseSchedule(int nbPoints, unsigned long listTime[],
     return _nbPoints;
 }
 
-int ScheduledCsgn::checkCsgnFromTimedSchedule()   {
+// extract time from string
+// stime: input string   of format  hh:mm[:ss]
+// return: long nb of seconds : hh*3600 + mm*60 + ss
+//           or < 0 if error
+long extractTimeIn_hh_mm_ss(String stime) {
+    long ltime=0;
+    int ind=-1;
+    String sval="";
+    int ival=0;
+
+    ind = stime.indexOf(':');
+    if (ind < 0)
+        return -5;
+
+    sval = stime.substring(0,ind);   // extract hour in hh:mm[:ss]
+    ival = sval.toInt();
+    // if  sval is not an int
+    if ( (ival == 0) && (! sval.equals("0")) && (! sval.equals("00")) )
+        return -6;
+    if ( (ival < 0) || (ival > 23) )
+        return -7;
+
+    // okay   store hours
+    ltime = long(ival)*3600;
+
+    stime = stime.substring(ind+1);   // keep mm[:ss] in hh:mm[:ss]
+    ind = stime.indexOf(':');
+    if (ind > 0)   {
+        sval = stime.substring(0,ind);    // extract minute in mm:ss
+    }
+    else
+        sval = stime;       // no extraction, there is no :ss  in stime
+
+    ival = sval.toInt();
+    // if  sval is not an int
+    if ( (ival == 0) && (! sval.equals("0")) && (! sval.equals("00")) )
+        return -8;
+    if ( (ival < 0) || (ival > 59) )
+        return -9;
+
+    // okay store minutes
+    ltime += ival*60;
+
+    // if there are seconds to extracts
+    if ( ! stime.equals(sval) )   {
+
+        sval = stime.substring(ind+1);   // keep ss in mm:ss
+
+        ival = sval.toInt();
+        // if  sval is not an int
+        if ( (ival == 0) && (! sval.equals("0")) && (! sval.equals("00")) )
+            return -10;
+        if ( (ival < 0) || (ival > 59) )
+            return -11;
+
+        // okay store minutes
+        ltime += ival;
+    }
+
+    return ltime;
+}
+
+// arg input sSched: the String contains the schedule with this format:
+//   nbPointN;h0:m0:s0;csgn0;h1:m1:s1;csgn1 ... hN:mN:sN;csgnN
+//   ex: 3;05:15:00;12.0;12:30;15.5;21:02:55;16.7
+//      -->  between 21:02:55 and 24:00:00 and until 05:15:00, the val 16.7 is applied.
+//      for 12:30  seconds are omitted
+int ScheduledCsgn::copyEraseScheduleString(String sSched)   {
+    const char BAD_FMT[] = "bad format for schedule";
+    String truncSched="";
+    String sval="";
+    int nbPoints=0;
+    unsigned long listTime[_MAX_POINTS];
+    float listCsgn[_MAX_POINTS];
+
+    int ind = sSched.indexOf(';');
+    if (ind < 0)   {
+        SERIAL_MSG.println(BAD_FMT);
+        return -1;
+    }
+    sval = sSched.substring(0,ind);
+    nbPoints = sval.toInt();
+    if (nbPoints == 0)   {  // sval is not an int (or val = "00")
+        SERIAL_MSG.println(BAD_FMT);
+        return -2;
+    }
+    if (nbPoints > _MAX_POINTS)   {
+        SERIAL_MSG.println(F("too many points for schedule"));
+        return -3;
+    }
+
+    truncSched = sSched.substring(ind+1);
+    for (int i=0; i<nbPoints; i++)   {
+        // extract time
+        ind = truncSched.indexOf(';');
+        if (ind < 0)   {
+            SERIAL_MSG.println(BAD_FMT);
+            SERIAL_MSG.println(String("hour n")+i);
+            return -4;
+        }
+        String stime = truncSched.substring(0,ind);   // time with format  hh:mm[:ss]
+
+        // extract  time  as nb of seconds since 00H00mn, from string  hh:mm[:ss]
+        long ltime = extractTimeIn_hh_mm_ss(stime);
+
+        if ( ltime < 0 )  {
+            SERIAL_MSG.println(BAD_FMT);
+            SERIAL_MSG.println(String("hh:mm:ss n")+i+ " error n "+ ltime);
+            return ltime;
+        }
+        listTime[i] = ltime;
+
+        truncSched = truncSched.substring(ind+1);   // last part of schedule for next loop
+
+        // extract val csgn
+        String scsgn ="";
+        // if last point, no need to extract substring
+        if (i == nbPoints-1)   {
+            scsgn = truncSched;
+        }
+        else   {
+            ind = truncSched.indexOf(';');
+            if (ind < 0)   {
+                SERIAL_MSG.println(BAD_FMT);
+                SERIAL_MSG.println(String("csgn n")+i);
+                return -20;
+            }
+            scsgn = truncSched.substring(0,ind);
+
+            // last part of schedule for next loop
+            truncSched = truncSched.substring(ind+1);
+        }
+
+        listCsgn[i] = scsgn.toFloat();
+
+        // if it can not convert to float
+        if ( (fabs(listCsgn[i]) < 0.01) && ( ! scsgn.startsWith("0") ) )   {
+            SERIAL_MSG.println(BAD_FMT);
+            SERIAL_MSG.println(String("csgn n")+i);
+            return -21;
+        }
+
+    }   // for i
+
+    // transfer schedule in object
+    return copyEraseSchedule(nbPoints, listTime, listCsgn);
+}
+
+// add 1 point to schedule
+// You may begin with erasing schedule with special value -1 on is
+// returns the nb of points in schedule
+int ScheduledCsgn::addPointSchedule(int ih, int im, int is, float csgn)   {
+    // special value:  if is == -1   erase all points
+    if (is == -1)   {
+        _nbPoints = 0;
+        // we need to go to fixed csgn
+        _isCsgnFixed = true;
+        return 0;
+    }
+
+    // if too many points, reject point
+    if (_nbPoints >= _MAX_POINTS)   {
+        SERIAL_MSG.println(F("too many points"));
+        return -1;
+    }
+
+    // The point is converted from h,m,s  -->  sec_from_0h,0m,0s
+    unsigned long sec_since0H = long(ih)*3600 + im*60 + is;
+
+    // Special case : sec_since0H is equal to a previous point
+    // in this case the point is not added, it replaces previous value
+    for (int i=0; i<_nbPoints; i++)   {
+        if  (sec_since0H == _listPtTime[i])   {
+            _listPtVal[i]  = csgn;
+            SERIAL_MSG.println(F("erasing a previous point"));
+            // update csgn, since schedule has changed
+            checkCsgnFromTimedSchedule();
+            return _nbPoints;   //   <-- early EXIT
+        }
+    }
+
+    // i will add point to index i
+    // search right position, beginning with last
+    int i = _nbPoints;
+
+    // check if I have to decrease  i
+    while ( (i > 0) && (sec_since0H <= _listPtTime[i-1]) ) {
+        // I shift position of previous point, it increases in position
+        _listPtTime[i] = _listPtTime[i-1];
+        _listPtVal[i]  = _listPtVal[i-1];
+        i-- ;
+    }
+
+    // insert point
+    _listPtTime[i] = sec_since0H;
+    _listPtVal[i]  = csgn;
+
+    // update nb points
+    _nbPoints++ ;
+
+    // update csgn, since schedule has changed
+    checkCsgnFromTimedSchedule();
+
+    return _nbPoints;
+}   // addPointSchedule
+
+
+// remove 1 point to schedule
+// You may either erase whole schedule with special value -1 on ih
+// we find the point that applies for the time entered; this point is erased
+// returns the nb of points in schedule
+int ScheduledCsgn::rmPointSchedule(int ih, int im, int is)   {
+    // special value:  if ih == -1   erase all points
+    if (ih == -1)   {
+        _nbPoints = 0;
+        // we need to go to fixed csgn
+        _isCsgnFixed = true;
+        return 0;
+    }
+
+    // if no point, nothing to erase
     if (_nbPoints == 0)   {
-        SERIAL_MSG.println(F("no schedule available; csgn not modified"));
+        SERIAL_MSG.println(F("no point already"));
+        return -1;
+    }
+
+    // The point is converted from h,m,s  -->  sec_from_0h,0m,0s
+    unsigned long sec_since0H = long(ih)*3600 + im*60 + is;
+
+    // look for  point  _listPtTime[i]    that applies for time  sec_since0H
+    // Special case : sec_since0H is equal to a previous point
+    // in this case the point is not added, it replaces previous value
+    int i;
+    for (i=0; i<_nbPoints-1 && sec_since0H >= _listPtTime[i+1]; i++)
+    {}
+
+    // special case:  if   sec_since0H <  1st point, then the csgn of last point applies
+    //   nothing to shift, the point will be removed with  _nbPoints--
+    if ( sec_since0H >= _listPtTime[0] )   {
+        // point i is erased, following points are shifted
+        for (; i<_nbPoints-1; i++)   {
+            _listPtTime[i] = _listPtTime[i+1];
+            _listPtVal[i]  = _listPtVal[i+1];
+        }
+    }
+    // update nb points
+    _nbPoints-- ;
+
+    // update csgn, since schedule has changed
+    if (_nbPoints == 0)
+        _isCsgnFixed = true;   // we need to go to fixed csgn
+    else
+        checkCsgnFromTimedSchedule();
+
+    return _nbPoints;
+}   // rmPointSchedule
+
+
+void ScheduledCsgn::getSchedule(int &nbPoints, unsigned long listTime[], float listCsgn[])   {
+    nbPoints = _nbPoints;
+    for (int i=0; i<_nbPoints; i++)   {
+        listTime[i] = _listPtTime[i];
+        listCsgn[i] = _listPtVal[i];
+    }
+    SERIAL_MSG.println(String("ind: ")+ _indTime);
+    return;
+}   // getSchedule
+
+
+// read csgn in schedule
+int ScheduledCsgn::checkCsgnFromTimedSchedule()   {
+    // we return immediately if csgn is fixed and not read from schedule
+    if (_isCsgnFixed)
+        return 0;
+
+    if (_nbPoints == 0)   {
+        everyMillis(1000, SERIAL_MSG.println(F("no schedule available; csgn not modified"));)
         return 1;
     }
 
@@ -352,7 +799,7 @@ int ScheduledCsgn::checkCsgnFromTimedSchedule()   {
     if (_indTime > _nbPoints-1)   _indTime = _nbPoints-1;
 
     // (if _indTime is low) we increase _indTime
-    while ( (_indTime < _nbPoints-1) && (_listPtTime[_indTime+1] > now_s) )
+    while ( (_indTime < _nbPoints-1) && (_listPtTime[_indTime+1] < now_s) )
         _indTime++;
     // (if _indTime is high) we decrease _indTime
     while ( (_indTime > 0) && (_listPtTime[_indTime] > now_s) )
@@ -378,7 +825,9 @@ float ScheduledCsgn::get()   {
     return _currentVal;
 }
 
-int ScheduledCsgn::setCsgnAsFixed(boolean isFixed)   {
+// usage: isFixed=true  -->  the csgn will be fixed (keep the current value)
+//               =false -->  the csgn will follow the schedule
+int ScheduledCsgn::setCsgnAsFixedOrNot(boolean isFixed)   {
     // passing in fixed mode
     if (isFixed)   {
         // the current value (that surely corresponds to schedule) is now the fixed value

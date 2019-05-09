@@ -61,6 +61,11 @@ int setDate(const CommandList& aCL, Command& aCmd, const String& aInput);
 int getDate(const CommandList& aCL, Command &aCmd, const String& aInput);
 int updateHumCsgn(const CommandList& aCL, Command &aCmd, const String& aInput);
 int updateTempCsgn(const CommandList& aCL, Command &aCmd, const String& aInput);
+int updateTempSchedule(const CommandList& aCL, Command &aCmd, const String& aInput);
+int addPointTempSchedule(const CommandList& aCL, Command &aCmd, const String& aInput);
+int rmPointTempSchedule(const CommandList& aCL, Command &aCmd, const String& aInput);
+int tempIsFixedOrScheduled(const CommandList& aCL, Command &aCmd, const String& aInput);
+int tempCsgnStatus(const CommandList& aCL, Command &aCmd, const String& aInput);
 
 void     fakeReleveValeurs();
 
@@ -153,9 +158,11 @@ public:
 
 class ScheduledCsgn
 {
-private:
+public:
     static const uint8_t _MAX_POINTS = 10;
     static const unsigned long _periodUpdateCsgn_ms = 100;
+
+private:
     uint8_t _nbPoints;
     unsigned long _listPtTime[_MAX_POINTS];
     float _listPtVal[_MAX_POINTS];
@@ -172,11 +179,16 @@ public:
 public:
     ScheduledCsgn(float initCsgn=15.);
     void setFixedCsgn(float csgn)   { _currentVal = csgn;   _isCsgnFixed = true; }
-    int setCsgnAsFixed(boolean isFixed);
+    int setCsgnAsFixedOrNot(boolean isFixed);
     float get();
     int copyEraseSchedule(int nbPoints, unsigned long listTime[], float listCsgn[]);
+    int copyEraseScheduleString(String sSched);
+    int addPointSchedule(int ih, int im, int is, float csgn);
+    int rmPointSchedule(int ih, int im, int is);
+    void getSchedule(int &nbPoints, unsigned long listTime[], float listCsgn[]);
     int readCsgnFile();
     int checkCsgnFromTimedSchedule();
+    boolean isCsgnFixed()   { return _isCsgnFixed;  }
 };
 
 #endif // VIDOFROIDMSG_H

@@ -340,7 +340,7 @@ void loop ( )
   }
 
   // affichage regulier  (chaque 1s)
-  if ( secondes !=  secondesAffichagePrecedent )
+  if ( (secondes +60 -  secondesAffichagePrecedent) % 60  >= 5 )
   {
     secondesAffichagePrecedent = secondes ;
     releveValeurs ( ) ;
@@ -487,8 +487,8 @@ String getTrameConsigne() {
     // String(floatValue)  will convert float to String with format %0.2f
     sTrame = dateString   +separateurFichier+
              heureString  +separateurFichier+
-             String ( consigneTemp.get() )  +separateurFichier+
-             String ( consigneHum.get() );
+             String ( consigneTemp.get(), 2 )  +separateurFichier+
+             String ( consigneHum.get(), 2 );
     return sTrame;
 }
 
