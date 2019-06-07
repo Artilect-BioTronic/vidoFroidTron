@@ -16,15 +16,19 @@ SerialListener serListener(SERIAL_MSG);
 // list of available commands (user) that the arduino will accept
 Command cmdUser[] = {
     Command("SV",                   &sendFakeVal),
-    Command("csgn/humidity/cmd",    &updateHumCsgn,     "i",    "1-90"),
+    Command("csgn/hum/cmd",         &updateHumCsgn,     "i",    "1-90"),
     Command("csgn/temp/cmd",        &updateTempCsgn,    "i",    "-5-50"),
     Command("setDate",              &setDate,   "i,i,i,i,i,i",  "1900-2100,1-12,,0-23,,"),
     Command("sendDate",             &getDate),
-    Command("csgn/temp/schedule",   &updateTempSchedule, "s"),
-    Command("csgn/temp/adPtSched",  &addPointTempSchedule, "i,i,i,f", "0-23,0-59,-1-59,-5-50"),
-    Command("csgn/temp/rmPtSched",  &rmPointTempSchedule,  "i,i,i",   "-1-23,0-59,0-59"),
+    Command("csgn/temp/schedule",   &updateTempSchedule,    "s"),
+    Command("csgn/temp/adPtSched",  &addPointTempSchedule,  "i,i,i,f", "0-23,0-59,-1-59,-5-50"),
+    Command("csgn/temp/rmPtSched",  &rmPointTempSchedule,   "i,i,i",   "-1-23,0-59,0-59"),
     Command("csgn/temp/isFixed",    &tempIsFixedOrScheduled, "s", "yes|no|ask"),
-    Command("csgn/temp/status",     &tempCsgnStatus,    "s",    "csgn|all")
+    Command("csgn/temp/status",     &tempCsgnStatus,        "s",    "csgn|all"),
+    Command("csgn/hum/adPtSched",   &addPointHumSchedule,   "i,i,i,f", "0-23,0-59,-1-59,-5-50"),
+    Command("csgn/hum/rmPtSched",   &rmPointHumSchedule,    "i,i,i",   "-1-23,0-59,0-59"),
+    Command("csgn/hum/isFixed",     &humIsFixedOrScheduled, "s", "yes|no|ask"),
+    Command("csgn/hum/status",      &humCsgnStatus,         "s",    "csgn|all")
 };
 CommandList cmdLUserPhy("cmdUser", "CM+", SIZE_OF_TAB(cmdUser), cmdUser );
 
@@ -199,6 +203,10 @@ int updateTempCsgn(const CommandList& aCL, Command &aCmd, const String& aInput)
 }
 
 
+/*---------------------------------------------------------------*/
+/*       functions to manage temperature schedule                */
+/*---------------------------------------------------------------*/
+
 // "s" , the format is checked with function beneath
 // format is  nbPointN;h0:m0:s0;csgn0;h1:m1:s1;csgn1 ... hN:mN:sN;csgnN
 int updateTempSchedule(const CommandList& aCL, Command &aCmd, const String& aInput)
@@ -368,6 +376,149 @@ int tempCsgnStatus(const CommandList& aCL, Command &aCmd, const String& aInput)
 }
 
 /*---------------------------------------------------------------*/
+/*       functions to manage humidity schedule                   */
+/*---------------------------------------------------------------*/
+
+// "i,i,i,f",   "0-23,0-59,-1-59,-5-50"
+// to erase schedule, you can send -1 in field second
+int addPointHumSchedule(const CommandList& aCL, Command &aCmd, const String& aInput)
+{
+    ParsedCommand parsedCmd(aCL, aCmd, aInput);
+
+    // verify that msg with arguments is OK with format and limit
+    if (parsedCmd.verifyFormatMsg(aCmd, aInput) != ParsedCommand::NO_ERROR)
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    // get values
+    int ih = parsedCmd.getValueInt(1);
+    int im = parsedCmd.getValueInt(2);
+    int is = parsedCmd.getValueInt(3);
+    float fValue = parsedCmd.getValueFloat(4);
+
+    // we check that parsedCmd has not detected any error
+    if (parsedCmd.hasError())
+        return aCL.returnKO(aCmd, parsedCmd);
+
+
+    int ret = consigneHum.addPointSchedule(ih, im, is, fValue);
+
+    if (ret >= 0)
+    // I send back OK msg
+        aCL.msgOK(aInput, ret);
+    else
+        aCL.msgKO(aInput, ret);
+
+    return 0;
+}
+
+// "i,i,i",   "0-23,0-59,-1-59"
+// to erase whole schedule, you can send -1 in field second
+int rmPointHumSchedule(const CommandList& aCL, Command &aCmd, const String& aInput)
+{
+    ParsedCommand parsedCmd(aCL, aCmd, aInput);
+
+    // verify that msg with arguments is OK with format and limit
+    if (parsedCmd.verifyFormatMsg(aCmd, aInput) != ParsedCommand::NO_ERROR)
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    // get values
+    int ih = parsedCmd.getValueInt(1);
+    int im = parsedCmd.getValueInt(2);
+    int is = parsedCmd.getValueInt(3);
+
+    // we check that parsedCmd has not detected any error
+    if (parsedCmd.hasError())
+        return aCL.returnKO(aCmd, parsedCmd);
+
+
+    int ret = consigneHum.rmPointSchedule(ih, im, is);
+
+    if (ret >= 0)
+    // I send back OK msg
+        aCL.msgOK(aInput, ret);
+    else
+        aCL.msgKO(aInput, ret);
+
+    return 0;
+}
+
+// "s" , "yes|no|ask"
+int humIsFixedOrScheduled(const CommandList& aCL, Command &aCmd, const String& aInput)
+{
+    ParsedCommand parsedCmd(aCL, aCmd, aInput);
+
+    // verify that msg with arguments is OK with format and limit
+    if (parsedCmd.verifyFormatMsg(aCmd, aInput) != ParsedCommand::NO_ERROR)
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    // get values
+    String sValue = parsedCmd.getValueStr(1);
+
+    // we check that parsedCmd has not detected any error
+    if (parsedCmd.hasError())
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    int ret = 0;
+    if (sValue.equals("yes"))
+        ret = consigneHum.setCsgnAsFixedOrNot(true);
+    else if (sValue.equals("no"))
+        ret = consigneHum.setCsgnAsFixedOrNot(false);
+    else   {
+        aCL.msgOK(aInput, String(consigneTemp.isCsgnFixed()) );
+        return 0;
+    }
+
+    if (ret == 0)
+    // I send back OK msg
+        aCL.msgOK(aInput, "");
+    else
+        aCL.msgKO(aInput, ret);
+
+    return 0;
+}
+
+// "s",    "csgn|all"
+int humCsgnStatus(const CommandList& aCL, Command &aCmd, const String& aInput)
+{
+    ParsedCommand parsedCmd(aCL, aCmd, aInput);
+
+    // verify that msg with arguments is OK with format and limit
+    if (parsedCmd.verifyFormatMsg(aCmd, aInput) != ParsedCommand::NO_ERROR)
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    // get values
+    String sValue = parsedCmd.getValueStr(1);
+
+    // we check that parsedCmd has not detected any error
+    if (parsedCmd.hasError())
+        return aCL.returnKO(aCmd, parsedCmd);
+
+    if (sValue.equals("csgn"))
+        sendConsigne();
+    else   {
+        sendConsigne();
+        aCL.msgPrint( String("isCsgnFixed: ") + consigneHum.isCsgnFixed() );
+        int nbPoints=0;
+        unsigned long listTime[ScheduledCsgn::_MAX_POINTS];
+        float listCsgn[ScheduledCsgn::_MAX_POINTS];
+        consigneHum.getSchedule(nbPoints, listTime, listCsgn);
+        aCL.msgPrint( aCL.getCommand(aInput) + "/SchedNbPt/:" + nbPoints);
+        for (int i=0; i<nbPoints; i++)
+            aCL.msgPrint( aCL.getCommand(aInput) + "/pt/" +i+": " +
+                          listTime[i] / 3600 + ":" +
+                          (listTime[i] % 3600) / 60 + ":" +
+                          listTime[i] % 60 + ";" +
+                          listCsgn[i]
+                          );
+    }
+
+    // I send back OK msg
+    aCL.msgOK(aInput, "");
+
+    return 0;
+}
+
+/*---------------------------------------------------------------*/
 /*       classes pour filtrer                                    */
 /*---------------------------------------------------------------*/
 
@@ -471,8 +622,17 @@ void fakeReleveValeurs()
     humiditeExterieureEntiere = 62 ;
 }
 
-ScheduledCsgn::ScheduledCsgn(float initCsgn): _nbPoints(0), _currentVal(initCsgn),
-                _isCsgnFixed(true), _csgnFilename("")
+
+/*---------------------------------------------------------------*/
+/*       classe pour gerer des consignes                         */
+/*---------------------------------------------------------------*/
+
+constexpr const char ScheduledCsgn::_isFixedStr[] = "isFixed";
+constexpr const char ScheduledCsgn::_isScheduledStr[] = "isScheduled";
+
+ScheduledCsgn::ScheduledCsgn(float initCsgn, String scheduleFilename):
+                _nbPoints(0), _currentVal(initCsgn), _isCsgnFixed(true),
+                _scheduleFilename(scheduleFilename)
 {
 
 }
@@ -509,6 +669,9 @@ int ScheduledCsgn::copyEraseSchedule(int nbPoints, unsigned long listTime[],
         _listPtTime[i] = listTime[i];
         _listPtVal[i]  = listCsgn[i];
     }
+
+    // save new schedule in file
+    saveCsgnFile();
 
     return _nbPoints;
 }
@@ -716,6 +879,9 @@ int ScheduledCsgn::addPointSchedule(int ih, int im, int is, float csgn)   {
     // update csgn, since schedule has changed
     checkCsgnFromTimedSchedule();
 
+    // save new schedule in file
+    saveCsgnFile();
+
     return _nbPoints;
 }   // addPointSchedule
 
@@ -766,6 +932,9 @@ int ScheduledCsgn::rmPointSchedule(int ih, int im, int is)   {
         _isCsgnFixed = true;   // we need to go to fixed csgn
     else
         checkCsgnFromTimedSchedule();
+
+    // save new schedule in file
+    saveCsgnFile();
 
     return _nbPoints;
 }   // rmPointSchedule
@@ -832,7 +1001,6 @@ int ScheduledCsgn::setCsgnAsFixedOrNot(boolean isFixed)   {
     if (isFixed)   {
         // the current value (that surely corresponds to schedule) is now the fixed value
         _isCsgnFixed = true;
-        return 0;
     }
     else   {  // passing in (not fixed) scheduled mode
         // we cannot pass in scheduled,  there is no schedule available
@@ -840,13 +1008,167 @@ int ScheduledCsgn::setCsgnAsFixedOrNot(boolean isFixed)   {
             SERIAL_MSG.println(F("no schedule available; csgn stays Fixed"));
             return 1;
         }
-        checkCsgnFromTimedSchedule();
         _isCsgnFixed = false;
+        checkCsgnFromTimedSchedule();
     }
+    // save new schedule in file
+    saveCsgnFile();
+
     return 0;
 }
 
-int ScheduledCsgn::readCsgnFile()   {
-    SERIAL_MSG.println(F("readCsgnFile not implemented"));
+// read last csgn in csgn file
+// ex of csgn: 10/04/2017;20:00:00;31;isScheduled;2;16:08:00;30;16:08:10;31
+// that means: date;time;current_csgn;isScheduled|isFixed;nb_of_points;time1;val1;...
+int ScheduledCsgn::readCsgnFile(String aFilename)   {
+    String filename = aFilename;
+    if (filename.equals(""))
+        filename = _scheduleFilename;
+    File csgnFile = SD.open ( filename , FILE_READ ) ;
+    if ( ! csgnFile )   {
+        SERIAL_MSG.print(F("cannot open file:"));
+        SERIAL_MSG.println(filename);
+        csgnFile.close();
+        return -11;
+    }
+
+    // search the last line
+    // it is after \n char
+    // we search before invisible \r\n at end of file and possible empty line
+    // we position before a minimal line
+    long pos = csgnFile.size() - 20;
+    // failure case
+    if (pos < 0)   {
+        SERIAL_MSG.print(F("no schedule in file"));
+        SERIAL_MSG.println(filename);
+        csgnFile.close();
+        return -1;
+    }
+    csgnFile.seek(pos);
+    // we read backward, until \n
+    char readChar = ' ';
+    while ( (pos > 1) && readChar != '\n' )   {
+        pos-- ;
+        csgnFile.seek(pos);
+        readChar = csgnFile.read();
+        csgnFile.seek(pos);
+    }
+
+    // if readChar != '\n', we are at the beginnig of file.
+    // otherwise we read char '\n'
+    if (readChar == '\n')
+        pos += 1;
+    // go past date and time +19 char
+    pos += 19;
+
+    if ( ! csgnFile.seek(pos) )   {
+        SERIAL_MSG.println(F("last line of csgn file too short!"));
+        csgnFile.close();
+        return -2;
+    }
+    // we read one char, it must be a ;
+    readChar = csgnFile.read();
+    if (readChar != ';')   {
+        SERIAL_MSG.println(F("bad format on last line of csgn file!"));
+        csgnFile.close();
+        return -3;
+    }
+
+    // we read the next field in the line: the current csgn
+    String strBuf = "";
+    readChar = csgnFile.read();
+    while ( (readChar > 0) && (readChar != ';') )   {
+        strBuf += readChar;
+        readChar = csgnFile.read();
+    }
+    float csgn = strBuf.toFloat();
+    // test if conversion is not success
+    if ( (csgn == String(F("not a float")).toFloat()) && ( ! strBuf.startsWith("0")) )   {
+        SERIAL_MSG.println(F("no float csgn on last line of csgn file!"));
+        csgnFile.close();
+        return -4;
+    }
+    _currentVal = csgn;
+
+    // we read the next field in the line: isScheduled | isFixed
+    strBuf = "";
+    readChar = csgnFile.read();
+    while ( (readChar > 0) && (readChar != ';') )   {
+        strBuf += readChar;
+        readChar = csgnFile.read();
+    }
+    if (strBuf.equals(_isFixedStr))
+        _isCsgnFixed = true;
+    else if (strBuf.equals(_isScheduledStr))
+        _isCsgnFixed = false;
+    else   {
+        SERIAL_MSG.println(F("bad value: isScheduled | isFixed"));
+        csgnFile.close();
+        return -5;
+    }
+
+    // we read the remaining of the line
+    strBuf = "";
+    readChar = csgnFile.read();
+    while ( (readChar > 0) && (readChar != '\n') )   {
+        strBuf += readChar;
+        readChar = csgnFile.read();
+    }
+    csgnFile.close();
+
+    // update schedule with string
+    int cr = copyEraseScheduleString(strBuf);
+    if (cr < 0)
+        SERIAL_MSG.println(F("could not update schedule from file"));
+
+    return cr;
+}
+
+
+// save csgn in csgn file, added on last line
+// ex of csgn: 10/04/2017;20:00:00;31.5;isScheduled;2;16:08:00;30;16:08:10;31
+// that means: date;time;current_csgn;isScheduled|isFixed;nb_of_points;time1;val1;...
+int ScheduledCsgn::saveCsgnFile(String aFilename)   {
+    String filename = aFilename;
+    if (filename.equals(""))
+        filename = _scheduleFilename;
+    File csgnFile = SD.open ( filename , FILE_WRITE | O_APPEND | O_CREAT ) ;
+    if ( ! csgnFile )   {
+        SERIAL_MSG.print(F("cannot open file:"));
+        SERIAL_MSG.println(filename);
+        csgnFile.close();
+        return -1;
+    }
+
+    tmElements_t tm;
+    if ( ! RTC.read ( tm ) )   {
+        SERIAL_MSG.println(F("cannot read RTC"));
+        csgnFile.close();
+        return -2;
+    }
+
+    char buffer[22];
+    snprintf(buffer, 22, "%d-%.2d-%.2d;%.2d:%.2d:%.2d;", tmYearToCalendar(tm.Year),
+             tm.Month,tm.Day, tm.Hour,tm.Minute,tm.Second );
+    csgnFile.print( buffer ) ;
+    csgnFile.print( String(_currentVal,1) +";" ) ;
+    if (_isCsgnFixed)
+        csgnFile.print( String(_isFixedStr) +";" ) ;
+    else
+        csgnFile.print( String(_isScheduledStr) +";" ) ;
+
+    csgnFile.print( String(_nbPoints) ) ;
+    for (int i=0; i<_nbPoints; i++)
+        csgnFile.print( String(";") +
+                        (_listPtTime[i] / 3600) + ":" +
+                        (_listPtTime[i] % 3600) / 60 + ":" +
+                        _listPtTime[i] % 60 + ";" +
+                        String(_listPtVal[i],1)
+                      );
+
+    csgnFile.print("\n");
+
+    csgnFile.close();
     return 0;
+
 }

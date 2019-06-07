@@ -99,9 +99,6 @@ bool commandeRefroidissement = false ;
 bool commandeHum = false ;
 Chauffage chauffage(pinRad1, pinRad2, pinFan, 50);
 
-ScheduledCsgn consigneTemp(20);
-ScheduledCsgn consigneHum(50);
-
 //Génération des trames
 String TrameMesures = "" ;
 const String separateurFichier = ";" ;
@@ -111,6 +108,11 @@ const String separateurFichier = ";" ;
 const String  NomFichierConsignes  = "cons.csv" ;
 const String  NomFichierMesure  = "mes.csv" ;
 const String  NomFichierCommandes  = "com.csv" ;
+const String  NomFichierConsignesTemp  = "constemp.csv" ;
+const String  NomFichierConsignesHum  = "conshum.csv" ;
+
+ScheduledCsgn consigneTemp(20, NomFichierConsignesTemp);
+ScheduledCsgn consigneHum(50, NomFichierConsignesHum);
 
 //Echanges de fichiers
 const String debutFichier = "Debut du fichier" ;
@@ -236,7 +238,7 @@ void setup(void)
     consigneTemp.readCsgnFile();
     consigneHum.readCsgnFile();
 
-    // je recopie la consigne actuelle dans le fichier (que je viens de lire)
+    // je copie l en-tete dans le fichier de consigne (que je viens de lire)
     File regFileEcriture = SD.open ( NomFichierConsignes , FILE_WRITE ) ;
     if (regFileEcriture)
     {

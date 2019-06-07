@@ -1,3 +1,43 @@
+from __future__ import print_function
+import serial
+import time
+
+# empty serial buffer
+def emptyRx(ser):
+   response = ser.read(100)
+   while (len(response) >0 ):
+      print (response.decode('utf-8'), end='')
+      response = ser.read(100)
+   if (not response.endswith(b'\n')) and (len(response) >0):
+      print('')
+
+# use to sort log messages
+def logp (msg, gravity='trace'):
+   print('['+gravity+']' + msg)
+
+msgStartCmd='CM+'
+msgStartCmd2='SD+'
+msgEnd='\n'
+
+devSerial='/dev/ttyACM0'
+
+
+def scar(aCmd, prefix=msgStartCmd):
+   cmd2arduino = prefix + aCmd + msgEnd
+   ser.write(cmd2arduino.encode('utf-8'))
+   emptyRx(ser)
+
+def scar2(aCmd, prefix=msgStartCmd2):
+   cmd2arduino = prefix + aCmd + msgEnd
+   ser.write(cmd2arduino.encode('utf-8'))
+   emptyRx(ser)
+
+
+ser = serial.Serial(devSerial, baudrate=38400, timeout=0.2, writeTimeout=0.2)
+# waiting 1s for arduino reinit
+time.sleep(1)
+emptyRx(ser)
+
 scar("csgn/temp/status:all")
 scar("csgn/temp/schedule:2;16:08:00;30;16:08:10;31")
 scar("csgn/temp/isFixed:no")

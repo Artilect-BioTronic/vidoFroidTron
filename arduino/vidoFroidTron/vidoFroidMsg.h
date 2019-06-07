@@ -66,6 +66,10 @@ int addPointTempSchedule(const CommandList& aCL, Command &aCmd, const String& aI
 int rmPointTempSchedule(const CommandList& aCL, Command &aCmd, const String& aInput);
 int tempIsFixedOrScheduled(const CommandList& aCL, Command &aCmd, const String& aInput);
 int tempCsgnStatus(const CommandList& aCL, Command &aCmd, const String& aInput);
+int addPointHumSchedule(const CommandList& aCL, Command &aCmd, const String& aInput);
+int rmPointHumSchedule(const CommandList& aCL, Command &aCmd, const String& aInput);
+int humIsFixedOrScheduled(const CommandList& aCL, Command &aCmd, const String& aInput);
+int humCsgnStatus(const CommandList& aCL, Command &aCmd, const String& aInput);
 
 void     fakeReleveValeurs();
 
@@ -161,6 +165,8 @@ class ScheduledCsgn
 public:
     static const uint8_t _MAX_POINTS = 10;
     static const unsigned long _periodUpdateCsgn_ms = 100;
+    static const char _isFixedStr[];        // = "isFixed";
+    static const char _isScheduledStr[];    // = "isScheduled";
 
 private:
     uint8_t _nbPoints;
@@ -168,7 +174,6 @@ private:
     float _listPtVal[_MAX_POINTS];
     float _currentVal;
     boolean _isCsgnFixed;
-    String _csgnFilename;
     uint8_t _indTime;
 
 // static functions
@@ -177,7 +182,7 @@ public:
     static unsigned long getSecondSince0H();  // use  DS1307RTC.h  library
 
 public:
-    ScheduledCsgn(float initCsgn=15.);
+    ScheduledCsgn(float initCsgn=15., String scheduleFilename="");
     void setFixedCsgn(float csgn)   { _currentVal = csgn;   _isCsgnFixed = true; }
     int setCsgnAsFixedOrNot(boolean isFixed);
     float get();
@@ -186,9 +191,11 @@ public:
     int addPointSchedule(int ih, int im, int is, float csgn);
     int rmPointSchedule(int ih, int im, int is);
     void getSchedule(int &nbPoints, unsigned long listTime[], float listCsgn[]);
-    int readCsgnFile();
+    int readCsgnFile(String aFilename="");
+    int saveCsgnFile(String aFilename="");
     int checkCsgnFromTimedSchedule();
     boolean isCsgnFixed()   { return _isCsgnFixed;  }
+    String _scheduleFilename;
 };
 
 #endif // VIDOFROIDMSG_H
