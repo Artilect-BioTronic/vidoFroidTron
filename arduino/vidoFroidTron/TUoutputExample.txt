@@ -1,0 +1,94 @@
+Debut de l'init
+alimentation DS18B20 par pin 41
+AT+idSketch:vidoFroidTron.ino
+AT+idBuild:May 23 2019,18:52:33
+cannot open file:conshum.csv
+CM+cmd/state/D;H;warm;cold;hum:2019-08-08;15:29:21;;;Marche_Humidification
+CM+cmd/state/D;H;warm;cold;hum:2019-08-08;15:29:21;Marche_Chauffage;;
+CM+mesure/D;H;ti;hi;te;he;t3;t2;t1:2019-08-08;15:29:26;25;41;28;62;15.00;15.00;28.75
+>>> emptyRx(ser)
+CM+mesure/D;H;ti;hi;te;he;t3;t2;t1:2019-08-08;15:29:31;25;41;28;62;15.00;15.00;28.75
+CM+mesure/D;H;ti;hi;te;he;t3;t2;t1:2019-08-08;15:29:36;25;41;28;62;15.00;15.00;28.75
+>>> scar("csgn/temp/status:all")
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/state/D;H;t;h:2019-08-08;15:32:14;31.00;50.00
+CM+isCsgnFixed: 0
+ind: 0
+CM+csgn/temp/status/SchedNbPt/:2
+CM+csgn/temp/status/pt/0: 16:8:0;30.00
+CM+csgn/temp/status/pt/1: 16:8:10;31.00
+CM+csgn/temp/status/OK:
+>>> scar("csgn/temp/schedule:2;15:00:00;32;16:08:30;33")
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/temp/schedule/OK:
+CM+csgn/state/D;H;t;h:2019-08-08;15:43:25;32.00;50.00
+>>> scar("csgn/temp/status:all")
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/state/D;H;t;h:2019-08-08;15:43:48;32.00;50.00
+CM+isCsgnFixed: 0
+ind: 0
+CM+csgn/temp/status/SchedNbPt/:2
+CM+csgn/temp/status/pt/0: 15:0:0;32.00
+CM+csgn/temp/status/pt/1: 16:8:30;33.00
+CM+csgn/temp/status/OK:
+>>> scar("csgn/temp/isFixed:no")
+CM+mesure/D;H;ti;hi;te;he;t3;t2;t1:2019-08-08;15:45:20;25;41;28;62;15.00;15.00;29.00
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/temp/isFixed/OK:
+>>> scar("csgn/temp/schedule:2;16!56!22;35;17!51!12;38")
+Message is a cmdUser cmd, I am parsing...
+bad format for schedule
+hh:mm:ss n0 error n -5
+CM+csgn/temp/schedule/KO:-5
+>>> scar("csgn/temp/adPtSched:13,47,0,47")
+CM+mesure/D;H;ti;hi;te;he;t3;t2;t1:2019-08-08;15:49:13;25;41;28;62;15.00;15.00;29.00
+CM+mesure/D;H;ti;hi;te;he;t3;t2;t1:2019-08-08;15:49:18;25;41;28;62;15.00;15.00;29.00
+CM+csgn/state/D;H;t;h:2019-08-08;15:49:20;32.00;50.00
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/temp/adPtSched/OK:3
+CM+mesure/D;H;ti;hi;te;he;t3;t2;t1:2019-08-08;15:49:24;25;41;28;62;15.00;15.00;29.00
+>>> scar("csgn/temp/adPtSched:14,25,0,25")
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/temp/adPtSched/OK:4
+>>> scar("csgn/temp/adPtSched:14,35,0,35")
+CM+mesure/D;H;ti;hi;te;he;t3;t2;t1:2019-08-08;15:52:11;25;41;28;62;15.00;15.00;29.00
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/temp/adPtSched/OK:5
+>>> scar("csgn/temp/adPtSched:14,15,0,15.")
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/temp/adPtSched/OK:6
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/state/D;H;t;h:2019-08-08;16:07:37;32.00;50.00
+CM+isCsgnFixed: 1
+ind: 4
+CM+csgn/temp/status/SchedNbPt/:6
+CM+csgn/temp/status/pt/0: 13:47:0;47.00
+CM+csgn/temp/status/pt/1: 14:15:0;15.00
+CM+csgn/temp/status/pt/2: 14:25:0;25.50
+CM+csgn/temp/status/pt/3: 14:35:0;35.00
+CM+csgn/temp/status/pt/4: 16:8:0;30.00
+CM+csgn/temp/status/pt/5: 16:8:10;31.00
+CM+csgn/temp/status/OK:
+CM+mesure/D;H;ti;hi;te;he;t3;t2;t1:2019-08-08;16:07:42;25;41;28;62;15.00;15.00;29.13
+>>> scar("csgn/temp/adPtSched:14,35,-1,0")
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/temp/adPtSched/OK:0
+>>> scar("csgn/temp/status:all")
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/state/D;H;t;h:2019-08-08;16:08:31;32.00;50.00
+CM+isCsgnFixed: 1
+ind: 4
+CM+csgn/temp/status/SchedNbPt/:0
+CM+csgn/temp/status/OK:
+CM+mesure/D;H;ti;hi;te;he;t3;t2;t1:2019-08-08;16:08:32;25;41;28;62;15.00;15.00;29.13
+>>> scar("csgn/temp/adPtSched:14,15,0,15.")
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/temp/adPtSched/OK:1
+>>> scar("csgn/temp/status:all")
+Message is a cmdUser cmd, I am parsing...
+CM+csgn/state/D;H;t;h:2019-08-08;16:09:06;32.00;50.00
+CM+isCsgnFixed: 1
+ind: 4
+CM+csgn/temp/status/SchedNbPt/:0
+CM+csgn/temp/status/OK:
+

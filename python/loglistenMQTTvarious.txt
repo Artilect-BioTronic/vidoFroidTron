@@ -1,0 +1,9 @@
+[info]logStartTime:Mon Aug  5 19:10:50 2019
+[trace]reading dictionary in file : ./passMqtt.txt
+[trace]mqttc.connect : 0
+[info]logStartTime:Mon Aug  5 19:12:22 2019
+[trace]reading dictionary in file : ./passMqtt.txt
+[trace]mqttc.connect : 0
+[info]logStartTime:Mon Aug  5 19:14:46 2019
+[trace]reading dictionary in file : ./passMqtt.txt
+[trace]mqttc.connect : 0
