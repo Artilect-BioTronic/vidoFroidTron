@@ -24,7 +24,7 @@ if ($conn->connect_error) {
 }
 
 // if possible, we put values in table
-if ( ($hours != null) and ($csgns != null) )   
+if ( ($hours !== null) and ($csgns !== null) )   
 {
     // erase former values
     $sql = "TRUNCATE TABLE " . $table;

@@ -1,10 +1,12 @@
 *.bash*
 *.profile
 *.log
+__pycache__
 
 mysql.cfg
 mqtt.cfg
 passwd_mosquitto
+passMqtt.txt
 wpa_supplicant.conf
 rc.local
 

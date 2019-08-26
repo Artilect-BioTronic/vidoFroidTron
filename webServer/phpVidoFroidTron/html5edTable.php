@@ -148,6 +148,19 @@
       function handleClick() {
         console.log("rb: " + $('input[name=isFixed]:checked').val());
         console.log("val: " + $('input[name=valCsgn]').val());
+        var url = 'http://localhost/phpVidoFroidTron/update_fixedconsign.php';
+        url += '?isFixed='+ $('input[name=isFixed]:checked').val();
+        url += '&valCsgn='+ $('input[name=valCsgn]').val();
+        console.log("url: "+ url);
+        getJSON(url,
+        function(err, jrep) {
+          if (err !== null) {
+            console.log("handleclick err:" +err );
+          } else {
+            console.log("cr:" +JSON.stringify(jrep) );
+          }
+        });
+        
         return false; // prevent further bubbling of event
       }
 
