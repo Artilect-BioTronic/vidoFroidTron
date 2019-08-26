@@ -291,7 +291,7 @@
 	<script>
     
     function sendCsgn2Arduino(hrCsgn, tagResponse) {
-        var url = 'http://localhost/testVidotron/update_consign.php';
+        var url = 'http://localhost/phpVidoFroidTron/update_consign.php';
         url += '?hour='+ JSON.stringify(hrCsgn.data["hour"]);
         url += '&csgn='+ JSON.stringify(hrCsgn.data["csgn"]);
         console.log("url: "+ url);
@@ -307,7 +307,7 @@
     }   // sendCsgn2Arduino
 
     function getCsgnWeb(tagTable, tagChart) {
-        var url = 'http://localhost/testVidotron/update_consign.php';
+        var url = 'http://localhost/phpVidoFroidTron/update_consign.php';
         console.log("url: "+ url);
         getJSON(url,
         function(err, jrep) {
@@ -326,7 +326,7 @@
     }   // getCsgnWeb
 
     function getCsgnArduino(tagResponse, option) {
-        var url = 'http://localhost/testVidotron/get_consign_arduino.php';
+        var url = 'http://localhost/phpVidoFroidTron/get_consign_arduino.php';
         if (option == "fixedCsgn")
             url += '?option=' + option;
         console.log("url: "+ url);
