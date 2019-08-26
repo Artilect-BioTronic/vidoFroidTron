@@ -1,14 +1,16 @@
-#!/usr/bin/python
+# # ! /usr/bin/python
+# I dont use shebang # ! because the correct python to use is selected by user
 
 from __future__ import print_function
 import paho.mqtt.client as mqtt
 import paho.mqtt.publish as publish
 import serial
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import ast
 import sys, os, getopt
 import subprocess
+import mysql.connector
 
 # IP address of MQTT broker
 # example of free MQTT broker:  'iot.eclipse.org'
@@ -17,6 +19,11 @@ portMQTT=1883
 filePassMqtt="./passMqtt.txt"
 
 clientId='myNameOfClient'
+
+# for db
+dbName="vidotron"
+dbTableTWeb="plan_csgn_temp_web"
+dbTableTArduino="plan_csgn_temp_arduino"
 
 logfile=sys.stdout
 logStartTime=0.
@@ -29,6 +36,8 @@ mqTopic2='phytotron/shellCmd/oh/wifiID'
 mqTopic3='phytotron/admin/oh/askTime'
 mqTopic4='phytotron/shellCmd/oh/whatdoyouwant'
 mqTopic5='phytotron/shellCmd/oh/goadmin'
+mqTopic6='phytotron/consigne/web/update'
+mqTopic7='phytotron/arduMain/py/csgn/temp/status'
 
 #baseRepPython="/home/arnaud/Workspaces/Arduino/PythonScripts/"
 baseRepBin="/home/arnaud/Workspaces/bin/"
@@ -44,19 +53,18 @@ mqRepTopic3='phytotron/admin/pysys/piClock'
 mqRepTopic4='phytotron/shellCmd/pysys/what'
 mqRepTopic4b='phytotron/shellCmd/pysys/goadmin'
 
+mqPubTopic6='phytotron/arduMain/oh/csgn/temp/status'
+mqPubTopic6addPt='phytotron/arduMain/oh/csgn/temp/adPtSched'
+
 meaning = list(range(10))
 meaning[5:7] = ["todo5h", "todo6r"]
 
-# serial msg to arduino begin  with  prefTopic2 / prefTopic1 and end with endOfLine
-prefTopic1='CM+'
-prefTopic2='AT+'
-endOfLine='\n'
+# var to receive temp consign
+tempCsgn = {'nbPt':0, 'lPtHour':[timedelta(0,0)]*10, 'lPtCsgn':[0]*10 }
+
 
 sleepBetweenLoop=1    # sleep time (eg: 1s) to slow down loop
 sleepResponse=0.09    # sleep to leave enough time for the arduino to respond immediately
-
-namePy='py0'
-topFromPy= namePy + '/'
 
 
 # use to sort log messages
@@ -88,35 +96,23 @@ def reOpenLogfile(logfileName):
 
 def read_args(argv):
     # optional args have default values above
-    global logfile, hostMQTT, baudRate, namePy, mqTopic1, mqTopic2, devSerial
+    global logfile, hostMQTT, namePy
     logfileName = ''
     try:
-        opts, args = getopt.getopt(argv,"hl:b:r:n:t:u:d:",["logfile=","broker=","baudrate=","namepy=","mqTopic1=","mqTopic2=","devSerial="])
+        opts, args = getopt.getopt(argv,"hl:b:",["logfile=","broker="])
     except getopt.GetoptError:
-        print ('serial2MQTTduplex.py -l <logfile> -n <namepy> -b <broker> -r <baudrate> -t <mqTopic1> -u <mqTopic2> -d <devSerial>')
+        print ('serial2MQTTduplex.py -l <logfile> -b <broker>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print ('serial2MQTTduplex.py -l <logfile> -n <namepy> -b <broker> -r <baudrate> -t <mqTopic1> -u <mqTopic2> -d <devSerial>')
+            print ('serial2MQTTduplex.py -l <logfile> -b <broker>')
             sys.exit()
         elif opt in ("-l", "--logfile"):
             logfileName = arg
-        elif opt in ("-r", "--baudrate"):
-            baudRate = arg
         elif opt in ("-b", "--broker"):
             hostMQTT = arg
-        elif opt in ("-n", "--namepy"):
-            namePy = arg
-        elif opt in ("-t", "--mqTopic1"):
-            mqTopic1 = arg
-        elif opt in ("-u", "--mqTopic2"):
-            mqTopic2 = arg
-        elif opt in ("-d", "--devSerial"):
-            devSerial = arg
     logp('logfile is '+ logfileName, 'debug')
     logp('broker is '+ hostMQTT, 'debug')
-#    logp('baudrate is '+ str(baudRate), 'debug')
-#    logp('devSerial is '+ devSerial, 'debug')
     # I try to open logfile
     if logfileName != '' :
         reOpenLogfile(logfileName)
@@ -162,18 +158,26 @@ def readFileUpdateDict(fileName, defaultDict):
     return outSketch
 
 
+def on_log(client, userdata, level, buf):
+    print("log: ",buf)
+
 # The callback for when the client receives a CONNACK response from the server.
-def on_connect(client, userdata, rc):
-    print("Connected to mosquitto with result code "+str(rc))
+#def on_connect(client, userdata, flags, rc):   # python 2.7 signature
+def on_connect(client, userdata, flags, rc):
+    logp("Connected to mosquitto with result code "+str(rc), 'trace')
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
     mqttc.subscribe([(mqTopic1, 0) , (mqTopic2+'/#', 0), (mqTopic3, 0), 
-                     (mqTopic4, 0) , (mqTopic5, 0) ])
+                     (mqTopic4, 0) , (mqTopic5, 0) , (mqTopic6, 0),
+                     (mqTopic7+'/#', 0)
+                    ] )
     mqttc.message_callback_add(mqTopic1, on_message_mqTopicOH1)
     mqttc.message_callback_add(mqTopic2+'/#', on_message_mqTopicOH2)
     mqttc.message_callback_add(mqTopic3, on_message_mqTopicOH3)
     mqttc.message_callback_add(mqTopic4, on_message_mqTopicOH4)
     mqttc.message_callback_add(mqTopic5, on_message_mqTopicOH5)
+    mqttc.message_callback_add(mqTopic6, on_message_mqTopicOH6)
+    mqttc.message_callback_add(mqTopic7+'/#', on_message_mqTopic7)
 
 
 # The callback for when a PUBLISH message is received from the server.
@@ -230,9 +234,13 @@ def on_message_mqTopicOH4(client, userdata, msg):
 # The callback for when the server receives a message of  mqTopic5.
 def on_message_mqTopicOH5(client, userdata, msg):
     logp("mqTopicOH:"+msg.topic+" : "+str(msg.payload), 'info')
-    mqttc.publish(mqRepTopic4, indMeaning)   
-    mqttc.publish(mqRepTopic4b, meaning[indMeaning])
+    indMeaning = 0
+    ind = 0
+    while (ind <= 9 and ind == 0) :
+        if (str(msg.payload) == meaning[indMeaning]) :
+            indMeaning = ind
     try :
+        logp('executing mqTopicOH5 with meaning:'+ meaning[indMeaning], 'info')
         output = subprocess.Popen(cmdTopic5+ meaning[indMeaning] +" "+ str(msg.payload),
                                    shell=True, stdout=subprocess.PIPE).stdout.read()
     except:
@@ -241,63 +249,98 @@ def on_message_mqTopicOH5(client, userdata, msg):
         return
     mqttc.publish(mqRepTopic4b + '/OK', '')
 
+# The callback for when the server receives a message of  mqTopic6.
+def on_message_mqTopicOH6(client, userdata, msg):
+    logp("mqTopicOH6:"+msg.topic+" : "+str(msg.payload), 'info')
+    try :
+        # read planning of csgn in sql db
+        db = mysql.connector.connect(host="localhost",
+                             user=authInFile["dbusername"],
+                             passwd=authInFile["dbpassword"], 
+                             db=dbName)
+        cur = db.cursor()
+        cur.execute("SELECT hour, consign FROM "+ dbTableTWeb)
+        for row in cur.fetchall():
+            #print("rsql: %s, %f" % (row[0],row[1]) )
+            addPtSchedule2arduino(row[0],row[1])
+        #
+        # We request the shedule in arduino to check what was received
+        mqttc.publish(mqPubTopic6, 'all')
+    except Exception as e:
+        logp('exception managing msg:'+msg.topic+" : "+str(e), 'error')
+    finally : 
+        db.close()
 
-# read all available messages from arduino
-def readArduinoAvailableMsg(seri):
-    while seri.inWaiting():
-        # because of readline function, dont forget to open with timeout
-        response = seri.readline().replace('\n', '')
-        #logp ("answer is:" + response, 'debug')
-        if response.startswith(prefTopic1):
-            # prefTopic1: message to send to mqtt
-            # I dont analyse those messages, I transmit to mqtt
-            tags = response.replace(prefTopic1, '',1).split(':')
-            # security: I strip wildcard in topic before publishing
-            topic = tags[0].replace('+', '').replace('#', '')
-            pyTopic = mqTopic1 + topFromPy + topic
-            if len(tags) > 1 :
-                value = ':'.join(tags[1:])
-            else :
-                value = ''
-            # trace
-            logp('{} = {}'.format(pyTopic, value), 'to MQTT')
-            mqttc.publish(pyTopic, value, retain=True)
-        elif response.startswith(prefTopic2):
-            # prefTopic2: message to send to mqtt
-            # I dont analyse those messages, I transmit to mqtt
-            tags = response.replace(prefTopic2, '',1).split(':')
-            # security: I strip wildcard in topic before publishing
-            topic = tags[0].replace('+', '').replace('#', '')
-            pyTopic = mqTopic2 + topFromPy + topic
-            if len(tags) > 1 :
-                value = ':'.join(tags[1:])
-            else :
-                value = ''
-            # trace
-            logp('{} = {}'.format(pyTopic, value), 'to MQTT')
-            mqttc.publish(pyTopic, value, retain=True)
-        else :
-            # I dont analyse, but I print
-            logp (response, 'unknown from '+devSerial)
+# hourmns is datetime.timedelta, csgn is float
+def addPtSchedule2arduino(hourmns, csgn):
+    # string hh:mm:ss is parsed 
+    [hh, mm, ss] = hourmns.seconds//3600, (hourmns.seconds%3600)//60, hourmns.seconds%60
+    msg = "%i,%i,%i,%.1f" % (hh, mm, ss, csgn)
+    mqttc.publish(mqPubTopic6addPt, msg)
 
-
+# The callback for when the server receives a message of  mqTopic7
+def on_message_mqTopic7(client, userdata, msg):
+    logp("mqTopic:"+msg.topic+" : "+str(msg.payload), 'info')
+    # common part:   phytotron/arduMain/py/csgn/temp/status/
+    # final part + msg may be:   SchedNbPt/:6    pt/4: 16:8:0;30.00    OK:
+    finalTopic = msg.topic.replace( mqTopic7+'/', '' )
+    if ('SchedNbPt' in finalTopic):
+        tempCsgn['nbPt'] =  int(msg.payload)
+    elif ('pt/' in finalTopic):
+        # I add point to list in  tempCsgn
+        # it is not inserted in db yet
+        ind = int ( finalTopic.replace('pt/', '') )
+        if ( 0 <= ind  and  ind < tempCsgn['nbPt'] ) :
+            print( msg.payload.split(b';')[0]  )
+            [hh, mm, ss] = [int(x) for x in msg.payload.split(b';')[0].split(b':') ]
+            tempCsgn['lPtHour'][ind] =  timedelta( 0, hh*3600 + mm*60 + ss )
+            tempCsgn['lPtCsgn'][ind] =  float(msg.payload.split(b';')[1])
+    elif ('OK' in finalTopic):
+        print('tempCsgn:' + str(tempCsgn) )
+        try :
+            # read planning of csgn in sql db
+            db = mysql.connector.connect(host="localhost",
+                                 user=authInFile["dbusername"],
+                                 passwd=authInFile["dbpassword"], 
+                                 db=dbName)
+            cur = db.cursor()
+            cur.execute("TRUNCATE TABLE "+ dbTableTArduino)
+            for ind in range(tempCsgn['nbPt']):
+                print("sql: "+ "INSERT INTO %s (hour, consign) VALUES ('%s', %.1f)" %
+                        (dbTableTArduino, str(tempCsgn['lPtHour'][ind]),
+                             tempCsgn['lPtCsgn'][ind]) )
+                cur.execute("INSERT INTO %s (hour, consign) VALUES ('%s', %.1f)" %
+                            (dbTableTArduino, str(tempCsgn['lPtHour'][ind]),
+                             tempCsgn['lPtCsgn'][ind]) )
+            db.commit()
+            #
+        except Exception as e:
+            logp('exception in db, managing msg:'+msg.topic+" : "+str(e), 'error')
+        finally : 
+            db.close()
+    #
 
 #---------------------------------------------------
 #                   mosquitto
 #---------------------------------------------------
 
 # read password from file  passMqtt.txt
-authInFile = readFileUpdateDict(filePassMqtt, {"username":"user", "password":"pass"})
+authInFile = readFileUpdateDict(filePassMqtt, 
+        {"username":"user", "password":"pass",
+        "dbusername":"", "dbpassword":""
+        })
 
 # connection to mosquitto
 mqttc = mqtt.Client("", True, None, mqtt.MQTTv31)
 mqttc.on_message = on_message
 mqttc.on_connect = on_connect
-if (authInFile.has_key('username') and authInFile.has_key('password')) :
+mqttc.on_log=on_log   # help debugging
+if ('username' in authInFile and 'password' in authInFile) :
     mqttc.username_pw_set(authInFile["username"], authInFile["password"])
 
 cr = mqttc.connect(hostMQTT, port=portMQTT, keepalive=60, bind_address="")
 mqttc.loop_start()
+#logp("mqttc.connect : %d" % (cr), 'trace')
 
 
 # infinite loop
